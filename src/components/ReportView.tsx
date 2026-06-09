@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useBilling } from '../context/BillingContext';
-import { Calendar, FileText, Download, Printer, Percent, BarChart3, TrendingUp, DollarSign } from 'lucide-react';
+import { Calendar, FileText, Download, Printer, Percent, BarChart3, TrendingUp, DollarSign, ShieldCheck, FileSpreadsheet, Users, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export const ReportView: React.FC = () => {
-  const { invoices, expenses, payments, cashAccounts } = useBilling();
+  const { invoices, expenses, payments, cashAccounts, customers } = useBilling();
   
   const [activeReportTab, setActiveReportTab] = useState<'rugilaba' | 'penjualan' | 'expenses'>('rugilaba');
   const [startDate, setStartDate] = useState('2026-01-01');
   const [endDate, setEndDate] = useState('2026-12-31');
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
 
   // Math filtering
   const filteredInvoices = invoices.filter(i => i.invoiceDate >= startDate && i.invoiceDate <= endDate);
@@ -31,45 +32,89 @@ export const ReportView: React.FC = () => {
     { name: 'Jun', sales: revenueTotal * 0.24, expenses: expenseTotal * 0.18 },
   ];
 
-  // Excel reporting download
-  const handleExportReportExcel = () => {
+  // Excel or CSV reporting & customer database download
+  const handleExportData = (format: 'xlsx' | 'csv', type: 'report' | 'customers') => {
     let rawData: any[] = [];
-    let reportName = 'Laporan';
+    let fileName = '';
 
-    if (activeReportTab === 'rugilaba') {
-      reportName = 'Laporan_Rugi_Laba';
-      rawData = [
-        { Parameter: 'Total Pendapatan Ter-Invoice (Sales)', Akumulasi: revenueTotal },
-        { Parameter: 'Total Beban Pengeluaran Operasional (Expenses)', Akumulasi: expenseTotal },
-        { Parameter: 'Net Profit / Rugi Laba Usaha Bersih', Akumulasi: netEarnings },
-        { Parameter: 'Realisasi Kas Masuk (Actual Receipts)', Akumulasi: revenueReceived },
-      ];
-    } else if (activeReportTab === 'penjualan') {
-      reportName = 'Buku_Penjualan';
-      rawData = filteredInvoices.map(i => ({
-        'Nomor Invoice': i.invoiceNumber,
-        'Pelanggan': i.customerName,
-        'Tanggal': i.invoiceDate,
-        'Sisa Tagihan': i.total - i.paidAmount,
-        'Total': i.total,
-        'Status': i.status
+    if (type === 'customers') {
+      fileName = 'Daftar_Pelanggan';
+      rawData = (customers || []).map(c => ({
+        'ID Pelanggan': c.customerId,
+        'Nama Klien': c.name,
+        'Nama Perusahaan': c.company,
+        'Alamat': c.address,
+        'Kota': c.city,
+        'Provinsi': c.province,
+        'No Telepon': c.phone,
+        'Email': c.email,
+        'NPWP': c.npwp || '-',
+        'Status': c.status || 'Aktif',
+        'Catatan': c.notes || '-',
+        'Tanggal Dibuat': c.createdAt
       }));
     } else {
-      reportName = 'Buku_Pengeluaran';
-      rawData = filteredExpenses.map(e => ({
-        'Nomor Transaksi': e.expenseNumber,
-        'Vendor': e.vendor,
-        'Kategori': e.category,
-        'Tanggal': e.date,
-        'Deskripsi': e.description,
-        'Total Pengeluaran': e.amount
-      }));
+      // Type is report
+      if (activeReportTab === 'rugilaba') {
+        fileName = 'Laporan_Rugi_Laba';
+        rawData = [
+          { Parameter: 'Total Pendapatan Ter-Invoice (Sales)', Akumulasi: revenueTotal },
+          { Parameter: 'Total Beban Pengeluaran Operasional (Expenses)', Akumulasi: expenseTotal },
+          { Parameter: 'Net Profit / Rugi Laba Usaha Bersih', Akumulasi: netEarnings },
+          { Parameter: 'Realisasi Kas Masuk (Actual Receipts)', Akumulasi: revenueReceived },
+          ...categoriesSum(filteredExpenses).map(item => ({
+            Parameter: `Beban: ${item.category}`,
+            Akumulasi: item.amount
+          }))
+        ];
+      } else if (activeReportTab === 'penjualan') {
+        fileName = 'Buku_Penjualan';
+        rawData = filteredInvoices.map(i => ({
+          'Nomor Invoice': i.invoiceNumber,
+          'Pelanggan': i.customerName,
+          'Tanggal': i.invoiceDate,
+          'Jatuh Tempo': i.dueDate,
+          'Terbayar': i.paidAmount,
+          'Sisa Tagihan': i.total - i.paidAmount,
+          'Total Tagihan': i.total,
+          'Status': i.status
+        }));
+      } else {
+        fileName = 'Buku_Pengeluaran';
+        rawData = filteredExpenses.map(e => ({
+          'Nomor Transaksi': e.expenseNumber,
+          'Penerima Dana': e.vendor,
+          'Kategori': e.category,
+          'Tanggal': e.date,
+          'Deskripsi': e.description,
+          'Total Pengeluaran': e.amount
+        }));
+      }
+    }
+
+    if (rawData.length === 0) {
+      alert('Tidak ada data yang tersedia untuk diekspor pada filter ini.');
+      return;
     }
 
     const ws = XLSX.utils.json_to_sheet(rawData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Report');
-    XLSX.writeFile(wb, `FORSDIG_Billing_${reportName}.xlsx`);
+    if (format === 'xlsx') {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Audit_Data');
+      XLSX.writeFile(wb, `FORSDIG_Billing_${fileName}_${startDate}_sd_${endDate}.xlsx`);
+    } else {
+      const csvContent = XLSX.utils.sheet_to_csv(ws);
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `FORSDIG_Billing_${fileName}_${startDate}_sd_${endDate}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    setExportDropdownOpen(false);
   };
 
   return (
@@ -103,14 +148,78 @@ export const ReportView: React.FC = () => {
             />
           </div>
           
-          <button 
-            onClick={handleExportReportExcel}
-            className="p-1 px-3 bg-slate-900 border border-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer hover:bg-black"
-            id="export-report-btn"
-          >
-            <Download size={13} />
-            <span>Ekspor</span>
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+              className="p-1 px-3 bg-red-650 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-red-100/50 transition-all border border-transparent"
+              id="export-dropdown-toggle-btn"
+            >
+              <Download size={13} />
+              <span>Ekspor Data Audit</span>
+              <ChevronDown size={11} className={`transform transition-transform ${exportDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {exportDropdownOpen && (
+              <>
+                {/* Backdrop dummy to dismiss */}
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setExportDropdownOpen(false)} 
+                />
+                
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl border border-slate-150 shadow-2xl py-2 z-20 text-xs text-slate-705 animate-scale-up">
+                  <div className="px-3 py-1.5 text-[9px] font-extrabold text-slate-400 uppercase tracking-widest bg-slate-50 border-b border-slate-100 mb-1">
+                    Laporan Keuangan ({activeReportTab === 'rugilaba' ? 'Statement' : activeReportTab === 'penjualan' ? 'Penjualan' : 'Beban'})
+                  </div>
+                  <button 
+                    onClick={() => handleExportData('xlsx', 'report')}
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 font-bold cursor-pointer text-slate-700 hover:text-red-600 transition"
+                    id="export-active-xlsx"
+                  >
+                    <FileSpreadsheet size={13} className="text-emerald-600" />
+                    <span>Format Excel (.XLSX)</span>
+                  </button>
+                  <button 
+                    onClick={() => handleExportData('csv', 'report')}
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 font-bold cursor-pointer text-slate-705 hover:text-slate-900 transition"
+                    id="export-active-csv"
+                  >
+                    <FileText size={13} className="text-slate-500" />
+                    <span>Format CSV (.CSV)</span>
+                  </button>
+
+                  <div className="my-1.5 border-t border-slate-100" />
+
+                  <div className="px-3 py-1.5 text-[9px] font-extrabold text-slate-400 uppercase tracking-widest bg-slate-50 border-b border-slate-100 mb-1">
+                    Database Pelanggan
+                  </div>
+                  <button 
+                    onClick={() => handleExportData('xlsx', 'customers')}
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 font-bold cursor-pointer text-slate-700 hover:text-red-705 transition"
+                    id="export-cust-xlsx"
+                  >
+                    <Users size={13} className="text-blue-600" />
+                    <span>Format Excel (.XLSX)</span>
+                  </button>
+                  <button 
+                    onClick={() => handleExportData('csv', 'customers')}
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 font-bold cursor-pointer text-slate-705 hover:text-slate-900 transition"
+                    id="export-cust-csv"
+                  >
+                    <FileText size={13} className="text-slate-500" />
+                    <span>Format CSV (.CSV)</span>
+                  </button>
+                  
+                  <div className="my-1.5 border-t border-slate-100" />
+                  
+                  <div className="px-3 py-1 bg-slate-50 text-[9px] text-slate-400 flex items-center space-x-1 font-bold rounded-b-xl border-t border-slate-100">
+                    <ShieldCheck size={11} className="text-emerald-500" />
+                    <span>Terotentikasi & Siap Audit</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

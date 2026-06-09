@@ -19,7 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen, 
   setMobileOpen 
 }) => {
-  const { currentUser, logout, notifications, seedInitialData } = useBilling();
+  const { currentUser, logout, notifications, seedInitialData, isDemoMode } = useBilling();
   
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
@@ -68,16 +68,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* User Info Bar */}
-      <div className="p-4 mx-4 my-2 rounded-xl bg-slate-50 border border-slate-100 flex flex-col justify-center">
+      <div className="p-4 mx-4 my-2 rounded-xl bg-slate-50 border border-slate-100 flex flex-col justify-center space-y-2.5">
         <div className="flex items-center space-x-3">
           <div className="w-9 h-9 rounded-full bg-slate-200 border-2 border-[#D32F2F] flex items-center justify-center font-bold text-slate-700">
             {currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'}
           </div>
           <div className="overflow-hidden">
             <h4 className="font-semibold text-xs text-slate-700 truncate">{currentUser?.name}</h4>
-            <span className="inline-block px-1.5 py-0.5 mt-0.5 text-[9px] font-bold bg-[#D32F2F]/5 text-[#D32F2F] rounded border border-[#D32F2F]/10">
+            <span className="inline-block px-1.5 py-0.5 mt-0.5 text-[9px] font-bold bg-[#D32F2F]/5 text-[#D32F2F] rounded border border-[#D32F2F]/10 font-sans">
               {currentUser?.role}
             </span>
+          </div>
+        </div>
+        
+        {/* Firebase / Demo Engine Status */}
+        <div className={`p-2 rounded-lg flex items-center space-x-2 border transition ${
+          isDemoMode 
+            ? 'bg-amber-50/50 border-amber-200 text-amber-800' 
+            : 'bg-emerald-50/50 border-emerald-200 text-emerald-800'
+        }`}>
+          <Database size={11} className={isDemoMode ? 'text-amber-500' : 'text-emerald-600 animate-pulse'} />
+          <div className="text-[9px] font-extrabold font-sans leading-tight">
+            <span>{isDemoMode ? 'Mode Sandbox (Offline)' : 'Firebase Cloud (Terhubung)'}</span>
           </div>
         </div>
       </div>

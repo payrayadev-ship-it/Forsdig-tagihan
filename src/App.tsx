@@ -13,12 +13,12 @@ import { ReportView } from './components/ReportView';
 import { UserRoleView } from './components/UserRoleView';
 import { SettingView } from './components/SettingView';
 import { 
-  Bell, Check, Shield, Lock, Mail, UserCheck, ChevronRight, X, AlertCircle
+  Bell, Check, Shield, Lock, Mail, UserCheck, ChevronRight, X, AlertCircle, Database, Globe
 } from 'lucide-react';
 
 function AppContent() {
   const { 
-    currentUser, login, register, notifications, markAsRead, logActivity, settings 
+    currentUser, login, register, notifications, markAsRead, logActivity, settings, loginWithGoogle 
   } = useBilling();
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -201,6 +201,28 @@ function AppContent() {
                   <ChevronRight size={13} />
                 </button>
               </div>
+            </div>
+
+            <div className="mt-4 border-t border-slate-850 pt-4">
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide block mb-2">Integrasi Firebase Cloud:</span>
+              <button
+                onClick={async () => {
+                  try {
+                    setAuthError('');
+                    await loginWithGoogle();
+                  } catch (err: any) {
+                    setAuthError(err.message || 'Gagal login real Google SSO.');
+                  }
+                }}
+                className="w-full flex items-center justify-between p-2.5 bg-red-650 hover:bg-red-700 text-white rounded-xl border border-red-600/30 font-extrabold transition text-[11px] cursor-pointer shadow-md shadow-red-950/10 animate-pulse-slow"
+                id="login-google-sso-cta"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Database size={13} className="text-amber-400" />
+                  <span>Koneksi Cloud (Google SSO)</span>
+                </span>
+                <ChevronRight size={13} />
+              </button>
             </div>
           </div>
 

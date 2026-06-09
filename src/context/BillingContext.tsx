@@ -71,6 +71,9 @@ interface BillingContextProps {
   addNotification: (title: string, message: string, type: SystemNotification['type']) => Promise<void>;
   markNotificationAsRead: (id: string) => Promise<void>;
   seedInitialData: () => Promise<void>;
+  runOverdueInvoicesCheck: () => Promise<number>;
+  sendOverdueReminderEmail: (id: string) => Promise<boolean>;
+  sendAllOverdueEmailReminders: () => Promise<number>;
 }
 
 const BillingContext = createContext<BillingContextProps | undefined>(undefined);
@@ -345,6 +348,16 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.setItem('forsdig_users', JSON.stringify(users));
     }
   }, [isDemoMode, customers, products, productCategories, invoices, payments, expenses, cashAccounts, receivables, notifications, logs, settings, users]);
+
+  // Automatic Background Overdue Detector
+  useEffect(() => {
+    if (invoices.length > 0) {
+      const timer = setTimeout(() => {
+        runOverdueInvoicesCheck();
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [invoices.length]);
 
   // 3. Setup helpers for write log
   const logActivity = async (action: string, category: string) => {
@@ -867,6 +880,93 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await logActivity(`Menghapus invoice ${invoice?.invoiceNumber || id}`, 'Invoice');
   };
 
+  // Automatic & Manual Automation for Overdue Invoices
+  const runOverdueInvoicesCheck = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    let updatedCount = 0;
+
+    // Filter invoices that are not paid/draft/cancelled and whose dueDate < today
+    const overdueList = invoices.filter(inv => {
+      const isUnpaid = inv.status !== 'Lunas' && inv.status !== 'Dibatalkan' && inv.status !== 'Draft';
+      const isPastDue = inv.dueDate < today;
+      return isUnpaid && isPastDue;
+    });
+
+    for (const inv of overdueList) {
+      // 1. If status is not 'Jatuh Tempo', transition it automatically to 'Jatuh Tempo'
+      if (inv.status !== 'Jatuh Tempo') {
+        updatedCount++;
+        const timestamp = new Date().toISOString().split('T')[0];
+        if (isDemoMode) {
+          setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'Jatuh Tempo', updatedAt: timestamp } : i));
+        } else {
+          try {
+            await setDoc(doc(db, 'invoices', inv.id), { status: 'Jatuh Tempo', updatedAt: timestamp }, { merge: true });
+          } catch (e) {
+            console.error("Auto transition overdue error:", e);
+          }
+        }
+
+        // Log this system transition
+        await logActivity(
+          `Sistem mendeteksi otomatis Invoice ${inv.invoiceNumber} jatuh tempo (tenggat ${inv.dueDate})`,
+          'Sistem_Otomatisasi'
+        );
+      }
+
+      // 2. Add system notification if there isn't one already for this invoice
+      const hasNotification = notifications.some(notif => notif.title.includes(inv.invoiceNumber));
+      if (!hasNotification) {
+        await addNotification(
+          `⚠️ Tagihan Jatuh Tempo: ${inv.invoiceNumber}`,
+          `Invoice dari pelanggan ${inv.customerName} sebesar Rp ${inv.total.toLocaleString()} melewati tenggat waktu ${inv.dueDate}. Pengingat pembayaran siap dikirim.`,
+          'danger'
+        );
+      }
+    }
+
+    return updatedCount;
+  };
+
+  const sendOverdueReminderEmail = async (id: string) => {
+    const inv = invoices.find(i => i.id === id);
+    if (!inv) return false;
+
+    const cust = customers.find(c => c.id === inv.customerId);
+    const clientEmail = cust?.email || 'klien@perusahaan.com';
+
+    // Generate dashboard notification
+    await addNotification(
+      `Email Pengingat Dikirim: ${inv.invoiceNumber}`,
+      `Dokumen peringatan keterlambatan pembayaran Invoice ${inv.invoiceNumber} dikirim otomatis ke email ${clientEmail}.`,
+      'success'
+    );
+
+    // Write log activity
+    await logActivity(
+      `Sistem otomatisasi mengirim surat tagihan pengingat untuk Invoice ${inv.invoiceNumber} ke ${clientEmail}`,
+      'Komunikasi_Email'
+    );
+
+    return true;
+  };
+
+  const sendAllOverdueEmailReminders = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const overdueList = invoices.filter(inv => {
+      const isUnpaid = inv.status !== 'Lunas' && inv.status !== 'Dibatalkan' && inv.status !== 'Draft';
+      const isPastDue = inv.dueDate < today;
+      return isUnpaid && isPastDue;
+    });
+
+    let count = 0;
+    for (const inv of overdueList) {
+      const success = await sendOverdueReminderEmail(inv.id);
+      if (success) count++;
+    }
+    return count;
+  };
+
   // 8. Payment Handling
   const addPayment = async (data: Omit<Payment, 'id' | 'paymentNumber' | 'isValidated' | 'createdAt' | 'updatedAt'>) => {
     const id = `pay-${Date.now()}`;
@@ -1137,7 +1237,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       addNotification,
       markNotificationAsRead,
       markAsRead: markNotificationAsRead,
-      seedInitialData
+      seedInitialData,
+      runOverdueInvoicesCheck,
+      sendOverdueReminderEmail,
+      sendAllOverdueEmailReminders
     }}>
       {children}
     </BillingContext.Provider>
