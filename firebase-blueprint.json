@@ -1,0 +1,258 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account and role details in FORSDIG Billing",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["Super Admin", "Admin Keuangan", "Staff", "Viewer"] },
+        "status": { "type": "string" }
+      },
+      "required": ["userId", "email", "role"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Client or Customer information",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "name": { "type": "string" },
+        "company": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "province": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "npwp": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["customerId", "name", "email", "status"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Products or Services offered",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "tax": { "type": "number" },
+        "unit": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["productId", "code", "name", "price", "status"]
+    },
+    "ProductCategory": {
+      "title": "ProductCategory",
+      "description": "Category for products and services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Invoices made for products/services sold",
+      "type": "object",
+      "properties": {
+        "invoiceId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "invoiceDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "tax": { "type": "number" },
+        "total": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Draft", "Dikirim", "Belum Dibayar", "Sebagian Dibayar", "Lunas", "Jatuh Tempo", "Dibatalkan"] },
+        "notes": { "type": "string" },
+        "items": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["invoiceId", "invoiceNumber", "customerId", "invoiceDate", "dueDate", "total", "status"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payments made for invoices",
+      "type": "object",
+      "properties": {
+        "paymentId": { "type": "string" },
+        "paymentNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "paymentDate": { "type": "string" },
+        "paymentMethod": { "type": "string", "enum": ["Transfer Bank", "Cash", "QRIS", "E-Wallet", "Virtual Account"] },
+        "amount": { "type": "number" },
+        "receiptUrl": { "type": "string" },
+        "notes": { "type": "string" },
+        "isValidated": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["paymentId", "paymentNumber", "invoiceId", "paymentDate", "paymentMethod", "amount"]
+    },
+    "Receivable": {
+      "title": "Receivable",
+      "description": "Outstanding debts and aging receivables",
+      "type": "object",
+      "properties": {
+        "receivableId": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "remainingAmount": { "type": "number" },
+        "agingDays": { "type": "number" },
+        "lastReminderSent": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["receivableId", "invoiceId", "customerId", "dueDate", "remainingAmount"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Business expense records",
+      "type": "object",
+      "properties": {
+        "expenseId": { "type": "string" },
+        "expenseNumber": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string", "enum": ["Operasional", "Gaji", "Utilitas", "Transportasi", "Pajak", "Lainnya"] },
+        "vendor": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "attachmentUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["expenseId", "expenseNumber", "date", "category", "amount"]
+    },
+    "CashAccount": {
+      "title": "CashAccount",
+      "description": "Cash and Bank account details",
+      "type": "object",
+      "properties": {
+        "accountId": { "type": "string" },
+        "accountName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "bankName": { "type": "string" },
+        "balance": { "type": "number" },
+        "currency": { "type": "string" },
+        "type": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["accountId", "accountName", "balance"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System alerts or messages",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["notificationId", "title", "message", "isRead", "createdAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "System Audit Trail",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "category": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["logId", "userId", "userEmail", "action", "timestamp"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Application preferences",
+      "type": "object",
+      "properties": {
+        "settingId": { "type": "string" },
+        "companyName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "website": { "type": "string" },
+        "qrisUrl": { "type": "string" }
+      },
+      "required": ["settingId", "companyName"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "Users of the billing system"
+    },
+    "customers": {
+      "schema": "Customer",
+      "description": "Client list details"
+    },
+    "products": {
+      "schema": "Product",
+      "description": "Offered products and services"
+    },
+    "product_categories": {
+      "schema": "ProductCategory",
+      "description": "Categories of offered products and services"
+    },
+    "invoices": {
+      "schema": "Invoice",
+      "description": "List of billing invoices"
+    },
+    "payments": {
+      "schema": "Payment",
+      "description": "List of payments made by clients"
+    },
+    "receivables": {
+      "schema": "Receivable",
+      "description": "Outstanding customer dues tracking"
+    },
+    "expenses": {
+      "schema": "Expense",
+      "description": "Business expense bookkeeping"
+    },
+    "cash_accounts": {
+      "schema": "CashAccount",
+      "description": "Company bank and cash registers"
+    },
+    "notifications": {
+      "schema": "Notification",
+      "description": "User specific warnings and in-app notifications"
+    },
+    "activity_logs": {
+      "schema": "ActivityLog",
+      "description": "Audit logging for enterprise compliant monitoring"
+    },
+    "settings": {
+      "schema": "Setting",
+      "description": "Global enterprise applet settings"
+    }
+  }
+}

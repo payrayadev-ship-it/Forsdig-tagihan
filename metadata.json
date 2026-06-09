@@ -1,0 +1,6 @@
+{
+  "name": "FORSDIG Billing",
+  "description": "Aplikasi billing modern untuk mengelola pelanggan, tagihan, pembayaran, pengeluaran, kas, dan laporan keuangan secara real-time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

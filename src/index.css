@@ -1,0 +1,166 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+
+  /* Accent Sanctuary Red Mapping */
+  --color-red-50: rgba(211, 47, 47, 0.04);
+  --color-red-100: rgba(211, 47, 47, 0.08);
+  --color-red-200: rgba(211, 47, 47, 0.15);
+  --color-red-500: #D32F2F;
+  --color-red-600: #D32F2F;
+  --color-red-650: #D32F2F;
+  --color-red-700: #B71C1C;
+  --color-red-800: #9E1A1A;
+  --color-red-900: #7F0E0E;
+  --color-red-950: #4A0000;
+
+  /* Slate Scale for Technical Precision */
+  --color-slate-50: #F8FAFC;
+  --color-slate-100: #F1F5F9;
+  --color-slate-150: #E2E8F0;
+  --color-slate-200: #E2E8F0;
+  --color-slate-300: #CBD5E1;
+  --color-slate-400: #94A3B8;
+  --color-slate-500: #64748B;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1E293B;
+  --color-slate-850: #0F172A;
+  --color-slate-900: #0F172A;
+  --color-slate-933: #0F172A;
+  --color-slate-950: #020617;
+  
+  /* Amber / Gold */
+  --color-amber-50: rgba(245, 158, 11, 0.05);
+  --color-amber-100: rgba(245, 158, 11, 0.1);
+  --color-amber-500: #D97706;
+  --color-amber-600: #D97706;
+  --color-amber-655: #B45309;
+}
+
+@layer utilities {
+  @keyframes slideLeft {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scaleUp {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-left {
+    animation: slideLeft 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-scale-up {
+    animation: scaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Base Body Styles */
+body {
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Elegant form-input styling for a technical datagrid feel */
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+input[type="date"],
+select,
+textarea {
+  font-family: inherit;
+  transition: all 150ms ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+input[type="date"]:focus,
+select:focus,
+textarea:focus {
+  border-color: #D32F2F !important;
+  box-shadow: 0 0 0 1px rgba(211, 47, 47, 0.1) !important;
+}
+
+/* Automatically apply monospace font to columns representing serials, prices, stats, dates */
+.td-mono,
+.font-mono-col,
+[class*="Rp "],
+[class*="IDR"] {
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+}
+
+/* Perfect PDF Print styles */
+@media print {
+  body {
+    background-color: white !important;
+    color: #0f172a !important;
+  }
+  
+  .no-print, 
+  header, 
+  aside, 
+  button, 
+  label, 
+  select,
+  input,
+  #close-invoice-modal-footer, 
+  #close-sidebar-btn {
+    display: none !important;
+  }
+  
+  #invoice-bill-print-card, 
+  #print-sheet-area, 
+  #ar-print-area {
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    background-color: white !important;
+  }
+}
+

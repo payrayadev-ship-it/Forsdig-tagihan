@@ -1,0 +1,193 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive / Helper Definition
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function hasRole(roles) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in roles;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // 1. User Validation
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() <= 128 &&
+             data.role in ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'];
+    }
+
+    // 2. Customer Validation
+    function isValidCustomer(data) {
+      return data.customerId is string && data.customerId.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.email is string && data.email.size() <= 128 &&
+             data.status in ['Aktif', 'Nonaktif'];
+    }
+
+    // 3. Product Validation
+    function isValidProduct(data) {
+      return data.productId is string && data.productId.size() <= 128 &&
+             data.code is string && data.code.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.price is number && data.price >= 0 &&
+             data.status in ['Aktif', 'Nonaktif'];
+    }
+
+    // 3b. Product Category Validation
+    function isValidProductCategory(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 128;
+    }
+
+    // 4. Invoice Validation
+    function isValidInvoice(data) {
+      return data.invoiceId is string && data.invoiceId.size() <= 128 &&
+             data.invoiceNumber is string && data.invoiceNumber.size() <= 128 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.total is number && data.total >= 0 &&
+             data.status in ['Draft', 'Dikirim', 'Belum Dibayar', 'Sebagian Dibayar', 'Lunas', 'Jatuh Tempo', 'Dibatalkan'];
+    }
+
+    // 5. Payment Validation
+    function isValidPayment(data) {
+      return data.paymentId is string && data.paymentId.size() <= 128 &&
+             data.paymentNumber is string && data.paymentNumber.size() <= 128 &&
+             data.invoiceId is string && data.invoiceId.size() <= 128 &&
+             data.amount is number && data.amount > 0 &&
+             data.paymentMethod in ['Transfer Bank', 'Cash', 'QRIS', 'E-Wallet', 'Virtual Account'];
+    }
+
+    // 6. Receivable Validation
+    function isValidReceivable(data) {
+      return data.receivableId is string && data.receivableId.size() <= 128 &&
+             data.invoiceId is string && data.invoiceId.size() <= 128 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.remainingAmount is number && data.remainingAmount >= 0;
+    }
+
+    // 7. Expense Validation
+    function isValidExpense(data) {
+      return data.expenseId is string && data.expenseId.size() <= 128 &&
+             data.expenseNumber is string && data.expenseNumber.size() <= 128 &&
+             data.amount is number && data.amount >= 0 &&
+             data.category in ['Operasional', 'Gaji', 'Utilitas', 'Transportasi', 'Pajak', 'Lainnya'];
+    }
+
+    // 8. CashAccount Validation
+    function isValidCashAccount(data) {
+      return data.accountId is string && data.accountId.size() <= 128 &&
+             data.accountName is string && data.accountName.size() <= 128 &&
+             data.balance is number;
+    }
+
+    // 9. Notification Validation
+    function isValidNotification(data) {
+      return data.notificationId is string && data.notificationId.size() <= 128 &&
+             data.title is string && data.title.size() <= 200 &&
+             data.message is string && data.message.size() <= 1000;
+    }
+
+    // 10. ActivityLog Validation
+    function isValidActivityLog(data) {
+      return data.logId is string && data.logId.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.action is string && data.action.size() <= 500;
+    }
+
+    // 11. Setting Validation
+    function isValidSetting(data) {
+      return data.settingId is string && data.settingId.size() <= 128 &&
+             data.companyName is string && data.companyName.size() <= 200;
+    }
+
+    // Match blocks for collections
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidUser(request.resource.data);
+      allow update: if isSignedIn() && isValidUser(request.resource.data) && (request.auth.uid == userId || hasRole(['Super Admin']));
+      allow delete: if hasRole(['Super Admin']);
+    }
+
+    match /customers/{customerId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidCustomer(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidProduct(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /product_categories/{categoryId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidProductCategory(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidInvoice(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidPayment(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /receivables/{receivableId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidReceivable(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isSignedIn() && hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer']);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan']) && isValidExpense(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /cash_accounts/{accountId} {
+      allow read: if isSignedIn() && hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer']);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan']) && isValidCashAccount(request.resource.data);
+      allow delete: if hasRole(['Super Admin']);
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidNotification(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    match /activity_logs/{logId} {
+      allow read: if hasRole(['Super Admin', 'Admin Keuangan']);
+      allow create: if isSignedIn() && isValidActivityLog(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin']) && isValidSetting(request.resource.data);
+      allow delete: if false;
+    }
+  }
+}
