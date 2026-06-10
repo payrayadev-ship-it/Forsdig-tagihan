@@ -273,7 +273,23 @@ export const InvoiceView: React.FC = () => {
       setActiveSubTab('list');
     } catch (saveError) {
       console.error("Error saving invoice:", saveError);
-      alert("Maaf, terjadi kesalahan saat menyimpan invoice. Silakan periksa kelengkapan data anda.");
+      let detailedError = "Maaf, terjadi kesalahan saat menyimpan invoice.";
+      if (saveError instanceof Error) {
+        try {
+          // Try parsing JSON format from handleFirestoreError
+          const parsed = JSON.parse(saveError.message);
+          if (parsed && parsed.error) {
+            detailedError = `Gagal menyimpan ke Database: ${parsed.error} (${parsed.operationType.toUpperCase()} ${parsed.path || ''})`;
+          } else {
+            detailedError = `Gagal menyimpan: ${saveError.message}`;
+          }
+        } catch {
+          detailedError = `Gagal menyimpan: ${saveError.message}`;
+        }
+      } else {
+        detailedError = `Gagal menyimpan: ${String(saveError)}`;
+      }
+      alert(detailedError + "\n\nHarap periksa kelengkapan data atau status akun Anda.");
     }
   };
 

@@ -103,19 +103,36 @@ export const PaymentView: React.FC = () => {
     e.preventDefault();
     if (!invoiceId || amount <= 0 || !selectedInvoice) return;
 
-    await addPayment({
-      customerId: selectedInvoice.customerId,
-      customerName: selectedInvoice.customerName.split(' - ')[0],
-      invoiceId: selectedInvoice.id,
-      invoiceNumber: selectedInvoice.invoiceNumber,
-      paymentDate,
-      paymentMethod,
-      amount: Number(amount),
-      receiptUrl: receiptBase64,
-      notes
-    });
-
-    setDrawerOpen(false);
+    try {
+      await addPayment({
+        customerId: selectedInvoice.customerId,
+        customerName: selectedInvoice.customerName.split(' - ')[0],
+        invoiceId: selectedInvoice.id,
+        invoiceNumber: selectedInvoice.invoiceNumber,
+        paymentDate,
+        paymentMethod,
+        amount: Number(amount),
+        receiptUrl: receiptBase64,
+        notes
+      });
+      setDrawerOpen(false);
+    } catch (err: any) {
+      console.error("Gagal menambahkan pembayaran:", err);
+      let detailedError = "Maaf, terjadi kesalahan saat merekam pembayaran piutang.";
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed && parsed.error) {
+            detailedError = `Gagal menyimpan ke Database: ${parsed.error} (${parsed.operationType.toUpperCase()} ${parsed.path || ''})`;
+          } else {
+            detailedError = `Gagal menyimpan: ${err.message}`;
+          }
+        } catch {
+          detailedError = `Gagal menyimpan: ${err.message}`;
+        }
+      }
+      alert(detailedError + "\n\nHarap periksa kelengkapan data atau status tagihan terkait.");
+    }
   };
 
   const handleValidate = async (id: string) => {

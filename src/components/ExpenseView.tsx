@@ -116,16 +116,33 @@ export const ExpenseView: React.FC = () => {
     e.preventDefault();
     if (amount <= 0 || !vendor) return;
 
-    await addExpense({
-      date,
-      category,
-      vendor,
-      amount: Number(amount),
-      description,
-      attachmentUrl: attachmentBase64
-    });
-
-    setDrawerOpen(false);
+    try {
+      await addExpense({
+        date,
+        category,
+        vendor,
+        amount: Number(amount),
+        description,
+        attachmentUrl: attachmentBase64
+      });
+      setDrawerOpen(false);
+    } catch (err: any) {
+      console.error("Gagal menambahkan pengeluaran:", err);
+      let detailedError = "Maaf, terjadi kesalahan saat merekam kas pengeluaran operasional.";
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed && parsed.error) {
+            detailedError = `Gagal menyimpan ke Database: ${parsed.error} (${parsed.operationType.toUpperCase()} ${parsed.path || ''})`;
+          } else {
+            detailedError = `Gagal menyimpan: ${err.message}`;
+          }
+        } catch {
+          detailedError = `Gagal menyimpan: ${err.message}`;
+        }
+      }
+      alert(detailedError + "\n\nHarap periksa kecukupan saldo Kas/Bank atau status akun Anda.");
+    }
   };
 
   const handleDelete = async (id: string) => {

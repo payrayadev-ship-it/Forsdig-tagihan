@@ -78,12 +78,30 @@ export const CustomerView: React.FC = () => {
       notes
     };
 
-    if (editingCustomer) {
-      await updateCustomer(editingCustomer.id, payload);
-    } else {
-      await addCustomer(payload);
+    try {
+      if (editingCustomer) {
+        await updateCustomer(editingCustomer.id, payload);
+      } else {
+        await addCustomer(payload);
+      }
+      setDrawerOpen(false);
+    } catch (err: any) {
+      console.error("Gagal menyimpan klien:", err);
+      let detailedError = "Maaf, terjadi kesalahan saat menyimpan data klien.";
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed && parsed.error) {
+            detailedError = `Gagal menyimpan ke Database: ${parsed.error} (${parsed.operationType.toUpperCase()} ${parsed.path || ''})`;
+          } else {
+            detailedError = `Gagal menyimpan: ${err.message}`;
+          }
+        } catch {
+          detailedError = `Gagal menyimpan: ${err.message}`;
+        }
+      }
+      alert(detailedError + "\n\nHarap periksa koneksi internet atau status kelayakan akun Anda.");
     }
-    setDrawerOpen(false);
   };
 
   // Delete Action Confirm

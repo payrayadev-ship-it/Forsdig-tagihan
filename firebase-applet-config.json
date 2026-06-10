@@ -3,7 +3,7 @@
   "appId": "1:612723411158:web:368bb8899bbea0f069a177",
   "apiKey": "AIzaSyAMTyFjfjJjJia_5M7HLRwUD8OOPcXTj74",
   "authDomain": "forsdig-tagihan.firebaseapp.com",
-  "firestoreDatabaseId": "",
+  "firestoreDatabaseId": "(default)",
   "storageBucket": "forsdig-tagihan.firebasestorage.app",
   "messagingSenderId": "612723411158",
   "measurementId": ""

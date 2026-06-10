@@ -92,12 +92,30 @@ export const ProductView: React.FC = () => {
       status
     };
 
-    if (editingItem) {
-      await updateProduct(editingItem.id, payload);
-    } else {
-      await addProduct(payload);
+    try {
+      if (editingItem) {
+        await updateProduct(editingItem.id, payload);
+      } else {
+        await addProduct(payload);
+      }
+      setDrawerOpen(false);
+    } catch (err: any) {
+      console.error("Gagal menyimpan produk:", err);
+      let detailedError = "Maaf, terjadi kesalahan saat menyimpan data produk.";
+      if (err instanceof Error) {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed && parsed.error) {
+            detailedError = `Gagal menyimpan ke Database: ${parsed.error} (${parsed.operationType.toUpperCase()} ${parsed.path || ''})`;
+          } else {
+            detailedError = `Gagal menyimpan: ${err.message}`;
+          }
+        } catch {
+          detailedError = `Gagal menyimpan: ${err.message}`;
+        }
+      }
+      alert(detailedError + "\n\nHarap periksa koneksi internet atau status kelayakan akun Anda.");
     }
-    setDrawerOpen(false);
   };
 
   const handleDelete = async (id: string) => {
