@@ -3,9 +3,10 @@ import { useBilling } from '../context/BillingContext';
 import { 
   Plus, Trash, Edit, Search, Receipt, Calendar, Printer, Send, 
   Eye, X, Check, Mail, PhoneCall, QrCode, AlertCircle,
-  Bell, Clock, Sparkles, CheckCircle, ShieldCheck
+  Bell, Clock, Sparkles, CheckCircle, ShieldCheck, FileDown
 } from 'lucide-react';
 import { Invoice, InvoiceItem, Customer, Product } from '../types';
+import { exportInvoiceToPDF } from '../utils/pdfGenerator';
 
 export const InvoiceView: React.FC = () => {
   const { 
@@ -130,6 +131,18 @@ export const InvoiceView: React.FC = () => {
     setNotes('');
     setStatus('Draft');
     setActiveSubTab('list');
+  };
+
+  const handleDownloadPDF = (invoice: Invoice) => {
+    try {
+      exportInvoiceToPDF(invoice, customers, settings, cashAccounts);
+      if (logActivity) {
+        logActivity(`Mengunduh PDF Resmi Invoice ${invoice.invoiceNumber}`, 'Invoice');
+      }
+    } catch (error) {
+      console.error('Gagal ekspor PDF:', error);
+      alert('Maaf, kegagalan sistem saat membangun dokumen PDF. Silakan coba cetak lewat browser.');
+    }
   };
 
   // Submit Invoice Form
@@ -626,6 +639,16 @@ export const InvoiceView: React.FC = () => {
                             id={`send-wa-${inv.id}`}
                           >
                             <Send size={14} />
+                          </button>
+
+                          {/* Export PDF Button */}
+                          <button 
+                            onClick={() => handleDownloadPDF(inv)}
+                            className="p-1 text-slate-400 hover:text-red-650 rounded hover:bg-slate-100 cursor-pointer"
+                            title="Unduh PDF Resmi"
+                            id={`download-pdf-${inv.id}`}
+                          >
+                            <FileDown size={14} className="text-red-600" />
                           </button>
 
                           {/* Edit Invoice button */}
@@ -1300,7 +1323,15 @@ export const InvoiceView: React.FC = () => {
                   id="modal-print-invoice"
                 >
                   <Printer size={13} />
-                  <span>Cetak (Unduh PDF)</span>
+                  <span>Cetak Browser</span>
+                </button>
+                <button 
+                  onClick={() => handleDownloadPDF(selectedInvoice)}
+                  className="flex items-center space-x-1.5 py-1.5 px-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer"
+                  id="modal-download-official-pdf"
+                >
+                  <FileDown size={13} />
+                  <span>Unduh PDF Resmi</span>
                 </button>
                 <button 
                   onClick={() => handleSendEmail(selectedInvoice)}
