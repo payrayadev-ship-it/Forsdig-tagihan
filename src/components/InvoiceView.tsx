@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useBilling } from '../context/BillingContext';
 import { 
-  Plus, Trash, Search, Receipt, Calendar, Printer, Send, 
+  Plus, Trash, Edit, Search, Receipt, Calendar, Printer, Send, 
   Eye, X, Check, Mail, PhoneCall, QrCode, AlertCircle,
   Bell, Clock, Sparkles, CheckCircle, ShieldCheck
 } from 'lucide-react';
@@ -9,13 +9,14 @@ import { Invoice, InvoiceItem, Customer, Product } from '../types';
 
 export const InvoiceView: React.FC = () => {
   const { 
-    invoices, customers, products, addInvoice, updateInvoiceStatus, deleteInvoice, settings, currentUser, cashAccounts, logActivity, addNotification,
+    invoices, customers, products, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, settings, currentUser, cashAccounts, logActivity, addNotification,
     runOverdueInvoicesCheck, sendOverdueReminderEmail, sendAllOverdueEmailReminders
   } = useBilling();
 
   // Navigation states
   const [activeSubTab, setActiveSubTab] = useState<'list' | 'create' | 'automation'>('list');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [qrisModelOpen, setQrisModelOpen] = useState(false);
 
   // Email dispatch modal state
@@ -101,6 +102,36 @@ export const InvoiceView: React.FC = () => {
     setItems(prev => prev.filter((_, idx) => idx !== index));
   };
 
+  const handleEditInvoice = (inv: Invoice) => {
+    setEditingInvoice(inv);
+    const relatedCust = customers.find(c => c.id === inv.customerId);
+    setCustomer(relatedCust || null);
+    setInvoiceDate(inv.invoiceDate);
+    setDueDate(inv.dueDate);
+    setItems(inv.items || []);
+    const itemsDiscountSum = (inv.items || []).reduce((sum, item) => sum + (item.discount || 0), 0);
+    setDiscount(Math.max(0, inv.discount - itemsDiscountSum));
+    setNotes(inv.notes || '');
+    setStatus(inv.status);
+    setActiveSubTab('create');
+  };
+
+  const handleCancelForm = () => {
+    setEditingInvoice(null);
+    setCustomer(null);
+    setInvoiceDate(new Date().toISOString().split('T')[0]);
+    setDueDate(() => {
+      const d = new Date();
+      d.setDate(d.getDate() + 14);
+      return d.toISOString().split('T')[0];
+    });
+    setItems([]);
+    setDiscount(0);
+    setNotes('');
+    setStatus('Draft');
+    setActiveSubTab('list');
+  };
+
   // Submit Invoice Form
   const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,39 +162,60 @@ export const InvoiceView: React.FC = () => {
     const calculatedTotal = Math.max(0, baseTaxable + ppnAmount - pphAmount);
 
     try {
-      const calculatedInvoice = await addInvoice({
-        customerId: customer.id,
-        customerName: `${customer.name} - ${customer.company}`,
-        invoiceDate,
-        dueDate,
-        subtotal,
-        discount: totalItemsDiscount + discount,
-        tax: totalTax,
-        ppnAmount,
-        pphAmount,
-        total: calculatedTotal,
-        notes,
-        items,
-        status
-      });
+      let finalInvoiceNumber = '';
+      if (editingInvoice) {
+        await updateInvoice(editingInvoice.id, {
+          customerId: customer.id,
+          customerName: `${customer.name} - ${customer.company}`,
+          invoiceDate,
+          dueDate,
+          subtotal,
+          discount: totalItemsDiscount + discount,
+          tax: totalTax,
+          ppnAmount,
+          pphAmount,
+          total: calculatedTotal,
+          notes,
+          items,
+          status
+        });
+        finalInvoiceNumber = editingInvoice.invoiceNumber;
+      } else {
+        const calculatedInvoice = await addInvoice({
+          customerId: customer.id,
+          customerName: `${customer.name} - ${customer.company}`,
+          invoiceDate,
+          dueDate,
+          subtotal,
+          discount: totalItemsDiscount + discount,
+          tax: totalTax,
+          ppnAmount,
+          pphAmount,
+          total: calculatedTotal,
+          notes,
+          items,
+          status
+        });
+        finalInvoiceNumber = calculatedInvoice.invoiceNumber;
+      }
 
       // Automatically dispatch email to customer if status is NOT Draft (published/diterbitkan)
       if (status !== 'Draft' && customer.email) {
-        const emailSubjectAuto = `[TAGIHAN RESMI] Invoice #${calculatedInvoice.invoiceNumber} - ${settings.companyName || 'FORSDIG'}`;
+        const emailSubjectAuto = `[TAGIHAN RESMI] Invoice #${finalInvoiceNumber} - ${settings.companyName || 'FORSDIG'}`;
         const itemDetailsAuto = (items || [])
           .map(itm => `- ${itm.name || 'Layanan'} (${itm.qty} x Rp ${itm.price.toLocaleString('id-ID')})`)
           .join('\n');
         const formattedAmtAuto = calculatedTotal.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 
         const emailMessageAuto = `Yth. ${customer.name},\n\n` +
-          `Bersama surat elektronik ini, kami menginformasikan bahwa tagihan resmi Invoice #${calculatedInvoice.invoiceNumber} dari ${settings.companyName || 'FORSDIG'} telah DITERBITKAN secara otomatis dengan rincian berikut:\n\n` +
+          `Bersama surat elektronik ini, kami menginformasikan bahwa tagihan resmi Invoice #${finalInvoiceNumber} dari ${settings.companyName || 'FORSDIG'} telah DITERBITKAN secara otomatis dengan rincian berikut:\n\n` +
           `Ringkasan Item:\n${itemDetailsAuto}\n\n` +
           `Total Tagihan: ${formattedAmtAuto}\n` +
           `Tanggal Jatuh Tempo: ${dueDate}\n\n` +
           `Pembayaran dapat ditransfer ke rekening bank resmi kami yang tercantum pada dokumen penagihan.\n\n` +
           `Unduh Dokumen PDF & Scan QRIS:\n` +
           `Link akses digital tagihan Anda terlampir otomatis. Silakan hubungi kami apabila ada pertanyaan rincian pengerjaan.\n\n` +
-          `Terima kasih atas kerja samanya.\n\n` +
+          `Teria kasih atas kerja samanya.\n\n` +
           `Salam hangat,\n` +
           `Divisi Keuangan - ${settings.companyName || 'FORSDIG'}`;
 
@@ -172,21 +224,21 @@ export const InvoiceView: React.FC = () => {
             customer.email,
             emailSubjectAuto,
             emailMessageAuto,
-            calculatedInvoice.invoiceNumber
+            finalInvoiceNumber
           );
 
           if (dispatchRes.success) {
             const typeLog = dispatchRes.sandbox ? " (Sandbox Mode)" : " (Resend API)";
             if (logActivity) {
               await logActivity(
-                `[Auto-Kirim] Tagihan ${calculatedInvoice.invoiceNumber} terkirim otomatis ke ${customer.email}${typeLog}`,
+                `[Auto-Kirim] Tagihan ${finalInvoiceNumber} terkirim otomatis ke ${customer.email}${typeLog}`,
                 'Komunikasi_Email'
               );
             }
             if (addNotification) {
               await addNotification(
                 `Auto-Email Terkirim`,
-                `Invoice ${calculatedInvoice.invoiceNumber} diterbitkan & email otomatis sukses dikirim ke ${customer.email}.`,
+                `Invoice ${finalInvoiceNumber} diterbitkan & email otomatis sukses dikirim ke ${customer.email}.`,
                 'success'
               );
             }
@@ -196,9 +248,10 @@ export const InvoiceView: React.FC = () => {
         }
       }
 
-      alert(`Berhasil menyimpan! Invoice #${calculatedInvoice.invoiceNumber} telah tersimpan dengan status: ${status}`);
+      alert(`Berhasil menyimpan! Invoice #${finalInvoiceNumber} telah tersimpan dengan status: ${status}`);
 
       // Reset Form
+      setEditingInvoice(null);
       setCustomer(null);
       setItems([]);
       setDiscount(0);
@@ -453,7 +506,7 @@ export const InvoiceView: React.FC = () => {
                 }`}
                 id="subnav-invoice-create"
               >
-                Terbitkan Invoice
+                {editingInvoice ? `Edit Invoice ${editingInvoice.invoiceNumber}` : 'Terbitkan Invoice'}
               </button>
               <button 
                 onClick={() => setActiveSubTab('automation')}
@@ -575,6 +628,34 @@ export const InvoiceView: React.FC = () => {
                             <Send size={14} />
                           </button>
 
+                          {/* Edit Invoice button */}
+                          {!isReadOnly && (
+                            <button 
+                              onClick={() => handleEditInvoice(inv)}
+                              className="p-1 text-slate-400 hover:text-blue-650 rounded hover:bg-slate-100 cursor-pointer"
+                              title="Edit Invoice"
+                              id={`edit-invoice-btn-${inv.id}`}
+                            >
+                              <Edit size={14} />
+                            </button>
+                          )}
+
+                          {/* Delete Invoice button */}
+                          {!isReadOnly && (
+                            <button 
+                              onClick={() => {
+                                if (confirm(`Apakah Anda yakin ingin menghapus Invoice ${inv.invoiceNumber}? Tindakan ini tidak dapat dibatalkan.`)) {
+                                  deleteInvoice(inv.id);
+                                }
+                              }}
+                              className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-slate-100 cursor-pointer"
+                              title="Hapus Invoice"
+                              id={`delete-invoice-btn-${inv.id}`}
+                            >
+                              <Trash size={14} />
+                            </button>
+                          )}
+
                           {/* Action update status direct */}
                           {!isReadOnly && (
                             <select
@@ -614,9 +695,20 @@ export const InvoiceView: React.FC = () => {
         /* Create Invoice Form Wrapper */
         <div className="bg-white rounded-2xl border border-slate-150 p-6 shadow-sm">
           <form onSubmit={handleSaveInvoice} className="space-y-6">
-            <h3 className="font-bold text-base text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-              <Receipt size={18} className="text-red-600" />
-              <span>Formulir Pembuatan Tagihan Baru</span>
+            <h3 className="font-bold text-base text-slate-900 border-b border-slate-100 pb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Receipt size={18} className="text-red-650" />
+                <span>{editingInvoice ? `Edit Tagihan #${editingInvoice.invoiceNumber}` : 'Formulir Pembuatan Tagihan Baru'}</span>
+              </span>
+              {editingInvoice && (
+                <button
+                  type="button"
+                  onClick={handleCancelForm}
+                  className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition cursor-pointer"
+                >
+                  Batal Edit
+                </button>
+              )}
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -924,18 +1016,18 @@ export const InvoiceView: React.FC = () => {
             <div className="flex items-center justify-end space-x-2 pt-4 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setActiveSubTab('list')}
+                onClick={editingInvoice ? handleCancelForm : () => setActiveSubTab('list')}
                 className="px-4 py-2 text-xs font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
                 id="form-invoice-cancel"
               >
-                Kembali ke List
+                {editingInvoice ? 'Batalkan Edit' : 'Kembali ke List'}
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-md cursor-pointer"
+                className="px-6 py-2.5 bg-red-650 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-md cursor-pointer font-bold"
                 id="form-invoice-submit"
               >
-                Simpan & Terbitkan Tagihan
+                {editingInvoice ? 'Simpan Perubahan Tagihan' : 'Simpan & Terbitkan Tagihan'}
               </button>
             </div>
           </form>

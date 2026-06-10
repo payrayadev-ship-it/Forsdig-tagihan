@@ -53,6 +53,7 @@ interface BillingContextProps {
   deleteProductCategory: (id: string) => Promise<void>;
   
   addInvoice: (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'paidAmount' | 'createdAt' | 'updatedAt'>) => Promise<Invoice>;
+  updateInvoice: (id: string, data: Partial<Omit<Invoice, 'id' | 'invoiceNumber' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
   updateInvoiceStatus: (id: string, status: Invoice['status']) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
   
@@ -851,6 +852,95 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return newInvoice;
   };
 
+  const updateInvoice = async (id: string, data: Partial<Omit<Invoice, 'id' | 'invoiceNumber' | 'createdAt' | 'updatedAt'>>) => {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const invoice = invoices.find(i => i.id === id);
+    if (!invoice) return;
+
+    const updatedInvoice = {
+      ...invoice,
+      ...data,
+      updatedAt: timestamp
+    };
+
+    if (isDemoMode) {
+      setInvoices(prev => prev.map(i => i.id === id ? updatedInvoice : i));
+    } else {
+      try {
+        await setDoc(doc(db, 'invoices', id), updatedInvoice, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `invoices/${id}`);
+      }
+    }
+
+    // Update corresponding receivable
+    const relatedRec = receivables.find(r => r.invoiceId === id);
+    
+    if (updatedInvoice.status === 'Draft' || updatedInvoice.status === 'Dibatalkan' || updatedInvoice.status === 'Lunas') {
+      // should delete receivable if it exists
+      if (relatedRec) {
+        if (isDemoMode) {
+          setReceivables(prev => prev.filter(r => r.invoiceId !== id));
+        } else {
+          try {
+            await deleteDoc(doc(db, 'receivables', relatedRec.id));
+          } catch (err) {
+            handleFirestoreError(err, OperationType.DELETE, `receivables/${relatedRec.id}`);
+          }
+        }
+      }
+    } else {
+      // update or create receivable
+      if (relatedRec) {
+        const updatedRec = {
+          ...relatedRec,
+          customerId: updatedInvoice.customerId,
+          customerName: updatedInvoice.customerName,
+          dueDate: updatedInvoice.dueDate,
+          totalAmount: Number(updatedInvoice.total),
+          remainingAmount: Number(updatedInvoice.total) - Number(updatedInvoice.paidAmount),
+          notes: updatedInvoice.notes
+        };
+        if (isDemoMode) {
+          setReceivables(prev => prev.map(r => r.invoiceId === id ? updatedRec : r));
+        } else {
+          try {
+            await setDoc(doc(db, 'receivables', relatedRec.id), updatedRec, { merge: true });
+          } catch (err) {
+            handleFirestoreError(err, OperationType.UPDATE, `receivables/${relatedRec.id}`);
+          }
+        }
+      } else {
+        const recId = `rec-${Date.now()}`;
+        const newRec = {
+          id: recId,
+          receivableId: recId,
+          invoiceId: id,
+          invoiceNumber: updatedInvoice.invoiceNumber,
+          customerId: updatedInvoice.customerId,
+          customerName: updatedInvoice.customerName,
+          dueDate: updatedInvoice.dueDate,
+          totalAmount: Number(updatedInvoice.total),
+          remainingAmount: Number(updatedInvoice.total) - Number(updatedInvoice.paidAmount),
+          agingDays: 0,
+          notes: updatedInvoice.notes
+        };
+        if (isDemoMode) {
+          setReceivables(prev => [...prev, newRec]);
+        } else {
+          try {
+            await setDoc(doc(db, 'receivables', recId), newRec);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `receivables/${recId}`);
+          }
+        }
+      }
+    }
+
+    await logActivity(`Memperbarui Invoice ${invoice.invoiceNumber}`, 'Invoice');
+    await addNotification('Invoice Diperbarui', `Invoice ${invoice.invoiceNumber} telah sukses diperbarui oleh admin.`, 'info');
+  };
+
   const updateInvoiceStatus = async (id: string, status: Invoice['status']) => {
     const timestamp = new Date().toISOString().split('T')[0];
     const invoice = invoices.find(i => i.id === id);
@@ -1246,6 +1336,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateProductCategory,
       deleteProductCategory,
       addInvoice,
+      updateInvoice,
       updateInvoiceStatus,
       deleteInvoice,
       addPayment,
