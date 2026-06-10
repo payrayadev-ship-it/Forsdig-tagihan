@@ -306,5 +306,9 @@ export const DUMMY_SETTING: SystemSetting = {
   email: 'billing@forsdig.id',
   address: 'Sopo Del Office Tower Lt. 18, Mega Kuningan, Jakarta Selatan',
   website: 'www.forsdig.id',
-  qrisUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=qris-demo-forsdig-billing'
+  qrisUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=qris-demo-forsdig-billing',
+  ppnEnabled: true,
+  ppnRate: 11,
+  pphEnabled: false,
+  pphRate: 2
 };

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useBilling } from '../context/BillingContext';
-import { Plus, Trash, Search, DollarSign, Calendar, Upload, FileCheck, X } from 'lucide-react';
+import { Plus, Trash, Search, DollarSign, Calendar, Upload, FileCheck, X, Sparkles, RefreshCw } from 'lucide-react';
 import { Expense, ExpenseCategory } from '../types';
 
 export const ExpenseView: React.FC = () => {
-  const { expenses, addExpense, deleteExpense, currentUser } = useBilling();
+  const { expenses, addExpense, deleteExpense, currentUser, addNotification } = useBilling();
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Semua');
@@ -17,16 +17,83 @@ export const ExpenseView: React.FC = () => {
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState('');
   const [attachmentBase64, setAttachmentBase64] = useState('');
+  const [attachmentMimeType, setAttachmentMimeType] = useState('image/jpeg');
+
+  // AI Extraction states
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionSuccess, setExtractionSuccess] = useState(false);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
 
   const categories: ExpenseCategory[] = ['Operasional', 'Gaji', 'Utilitas', 'Transportasi', 'Pajak', 'Lainnya'];
+
+  const extractReceipt = async (base64Data: string, mimeType: string) => {
+    setIsExtracting(true);
+    setExtractionError(null);
+    setExtractionSuccess(false);
+
+    try {
+      const response = await fetch('/api/extract-receipt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageBase64: base64Data,
+          mimeType,
+        }),
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success && result.data) {
+        const { vendor: extVendor, amount: extAmount, category: extCategory, description: extDescription, date: extDate } = result.data;
+
+        if (extVendor) setVendor(extVendor);
+        if (extAmount !== undefined) setAmount(Number(extAmount));
+        if (extCategory && categories.includes(extCategory as any)) {
+          setCategory(extCategory as any);
+        }
+        if (extDescription) setDescription(extDescription);
+        if (extDate) setDate(extDate);
+
+        setExtractionSuccess(true);
+        if (addNotification) {
+          addNotification(
+            'Struk Sukses Dipindai',
+            `Gemini AI otomatis mengekstrak ${extVendor || 'Vendor'} senilai Rp ${Number(extAmount || 0).toLocaleString('id-ID')}.`,
+            'success'
+          );
+        }
+      } else {
+        throw new Error(result.error || 'Gagal mengekstrak data dari kuitansi.');
+      }
+    } catch (err: any) {
+      console.error('Extraction error:', err);
+      setExtractionError(err.message || 'Gagal terhubung ke modul AI asisten kuitansi.');
+      if (addNotification) {
+        addNotification(
+          'Pindaian Mandiri Gagal',
+          `Sistem gagal mendeteksi struk otomatis. Kolom dapat Anda isi manual: ${err.message || err}`,
+          'info'
+        );
+      }
+    } finally {
+      setIsExtracting(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setAttachmentMimeType(file.type || 'image/jpeg');
+
     const reader = new FileReader();
     reader.onloadend = () => {
-      setAttachmentBase64(String(reader.result));
+      const base64Data = String(reader.result);
+      setAttachmentBase64(base64Data);
+      
+      // Auto-extract immediately upon file upload
+      extractReceipt(base64Data, file.type || 'image/jpeg');
     };
     reader.readAsDataURL(file);
   };
@@ -38,6 +105,10 @@ export const ExpenseView: React.FC = () => {
     setAmount(0);
     setDescription('');
     setAttachmentBase64('');
+    setAttachmentMimeType('image/jpeg');
+    setIsExtracting(false);
+    setExtractionSuccess(false);
+    setExtractionError(null);
     setDrawerOpen(true);
   };
 
@@ -273,21 +344,72 @@ export const ExpenseView: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Unggah Struk Foto Kuitansi</label>
-                <div className="border border-dashed border-slate-250 p-6 rounded-xl flex flex-col items-center justify-center bg-slate-50 cursor-pointer relative hover:bg-slate-100 transition">
-                  <Upload size={22} className="text-slate-400 mb-1.5" />
-                  <span className="text-xs text-slate-500 font-semibold">Klik untuk memilih struk scan kuitansi</span>
+                <div className={`border border-dashed p-6 rounded-xl flex flex-col items-center justify-center cursor-pointer relative hover:bg-slate-100 transition ${isExtracting ? 'border-red-400 bg-red-50/20' : 'border-slate-250 bg-slate-50'}`}>
+                  {isExtracting ? (
+                    <div className="flex flex-col items-center text-center">
+                      <RefreshCw size={26} className="text-red-655 animate-spin mb-1.5" />
+                      <span className="text-xs text-red-655 font-bold flex items-center gap-1">
+                        <Sparkles size={13} className="animate-pulse text-red-500" />
+                        Sedang Menganalisis dengan Gemini AI...
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-1">Mengekstrak Vendor, Nominal, Tanggal & Kategori...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload size={22} className="text-slate-400 mb-1.5" />
+                      <span className="text-xs text-slate-500 font-semibold text-center">Klik untuk memilih struk scan kuitansi</span>
+                      <span className="text-[10px] text-slate-400 mt-1">Data nominal & vendor akan terisi otomatis</span>
+                    </>
+                  )}
                   <input
                     type="file"
                     accept="image/*"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    disabled={isExtracting}
+                    className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                     onChange={handleFileUpload}
                     id="expense-file-input"
                   />
                 </div>
+
                 {attachmentBase64 && (
-                  <div className="mt-2 text-emerald-800 text-xs font-bold flex items-center gap-1">
-                    <FileCheck size={14} />
-                    <span>Lampiran nota terunggah (Format Base64)</span>
+                  <div className="mt-2 space-y-1.5 col-span-2">
+                    <div className="text-slate-700 text-xs font-medium flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <div className="flex items-center gap-1 text-emerald-850 font-bold">
+                        <FileCheck size={14} className="text-emerald-600" />
+                        <span>Kuitansi terlampir</span>
+                      </div>
+                      
+                      {!isExtracting && (
+                        <button
+                          type="button"
+                          onClick={() => extractReceipt(attachmentBase64, attachmentMimeType)}
+                          className="flex items-center gap-1.5 text-[10px] py-1 px-2.5 bg-red-50 hover:bg-red-100 text-red-650 rounded-lg border border-red-200 font-bold transition cursor-pointer"
+                          title="Pindai ulang gambar terunggah menggunakan AI"
+                        >
+                          <RefreshCw size={11} />
+                          <span>Pindai Ulang (AI)</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {isExtracting && (
+                      <div className="text-[10px] text-slate-500 animate-pulse flex items-center gap-1 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span>Mengirim gambar ke Gemini AI... mohon tunggu beberapa saat.</span>
+                      </div>
+                    )}
+
+                    {extractionSuccess && (
+                      <div className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-150 p-2 rounded-md font-medium flex items-center gap-1">
+                        <Sparkles size={12} className="text-emerald-650 animate-bounce" />
+                        <span>Data nominal, vendor, dan kriteria berhasil diisi otomatis oleh Gemini AI!</span>
+                      </div>
+                    )}
+
+                    {extractionError && (
+                      <div className="text-[10px] text-amber-800 bg-amber-50 border border-amber-150 p-2 rounded-md font-medium flex items-center gap-1">
+                        <span>Pemberitahuan: {extractionError}. Silakan mengisi kolom manual atau coba lagi.</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

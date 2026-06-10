@@ -52,7 +52,7 @@ interface BillingContextProps {
   updateProductCategory: (id: string, name: string) => Promise<void>;
   deleteProductCategory: (id: string) => Promise<void>;
   
-  addInvoice: (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'paidAmount' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addInvoice: (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'paidAmount' | 'createdAt' | 'updatedAt'>) => Promise<Invoice>;
   updateInvoiceStatus: (id: string, status: Invoice['status']) => Promise<void>;
   deleteInvoice: (id: string) => Promise<void>;
   
@@ -753,7 +753,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   // 7. Invoice CRUD
-  const addInvoice = async (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'paidAmount' | 'createdAt' | 'updatedAt'>) => {
+  const addInvoice = async (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'paidAmount' | 'createdAt' | 'updatedAt'>): Promise<Invoice> => {
     const id = `inv-${Date.now()}`;
     const nextNum = invoices.length + 1;
     const formattedDate = data.invoiceDate.replace(/-/g, '');
@@ -826,6 +826,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     await logActivity(`Membuat Invoice baru ${invoiceNumber}`, 'Invoice');
     await addNotification('Invoice Baru Terbit', `Invoice ${invoiceNumber} telah tercatat sebagai ${data.status}.`, 'info');
+    return newInvoice;
   };
 
   const updateInvoiceStatus = async (id: string, status: Invoice['status']) => {

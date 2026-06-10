@@ -73,6 +73,8 @@ export interface Invoice {
   subtotal: number;
   discount: number; // total discount
   tax: number; // total tax amount
+  ppnAmount?: number;
+  pphAmount?: number;
   total: number;
   paidAmount: number;
   status: InvoiceStatus;
@@ -177,4 +179,8 @@ export interface SystemSetting {
   qrisUrl: string; // Base64 mock or real link
   taxId?: string;
   currency?: string;
+  ppnEnabled?: boolean;
+  ppnRate?: number;
+  pphEnabled?: boolean;
+  pphRate?: number;
 }
