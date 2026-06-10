@@ -333,8 +333,6 @@ export const InvoiceView: React.FC = () => {
   };
 
   const dispatchExternalEmail = async (to: string, subject: string, message: string, invoiceNum: string): Promise<{ success: boolean; sandbox: boolean; error?: string }> => {
-    const apiKey = (import.meta as any).env?.VITE_RESEND_API_KEY;
-    
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
         <div style="background-color: #D32F2F; color: #ffffff; padding: 24px; text-align: center;">
@@ -355,57 +353,30 @@ export const InvoiceView: React.FC = () => {
       </div>
     `;
 
-    if (apiKey) {
-      try {
-        const response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            from: `${settings.companyName || 'FORSDIG'} <onboarding@resend.dev>`,
-            to: [to],
-            subject: subject,
-            html: htmlBody
-          })
-        });
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to,
+          subject,
+          html: htmlBody,
+          companyName: settings.companyName,
+          invoiceNumber: invoiceNum,
+          message
+        })
+      });
 
-        if (response.ok) {
-          return { success: true, sandbox: false };
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          return { success: false, sandbox: false, error: errData.message || `HTTP ${response.status}` };
-        }
-      } catch (err: any) {
-        return { success: false, sandbox: false, error: err.message || 'Network error' };
+      const resData = await response.json().catch(() => ({}));
+      if (response.ok && resData.success) {
+        return { success: true, sandbox: resData.sandbox ?? false };
+      } else {
+        return { success: false, sandbox: resData.sandbox ?? false, error: resData.error || `HTTP ${response.status}` };
       }
-    } else {
-      // Execute a real POST transaction request using standard web service logger (httpbin) to prove complete actual execution
-      try {
-        const response = await fetch('https://httpbin.org/post', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            recipient: to,
-            subject: subject,
-            payload_html: htmlBody,
-            invoice: invoiceNum,
-            system: 'FORSDIG ERP Automatic Email Engine',
-            timestamp: new Date().toISOString()
-          })
-        });
-
-        if (response.ok) {
-          return { success: true, sandbox: true };
-        } else {
-          return { success: false, sandbox: true, error: `HTTP ${response.status}` };
-        }
-      } catch (err: any) {
-        return { success: false, sandbox: true, error: err.message };
-      }
+    } catch (err: any) {
+      return { success: false, sandbox: false, error: err.message || 'Gagal berkomunikasi dengan server proxy email' };
     }
   };
 

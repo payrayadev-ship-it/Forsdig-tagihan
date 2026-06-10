@@ -849,35 +849,46 @@ function AppContent() {
 
             <div className="my-5 p-4 bg-slate-50 rounded-2xl border border-slate-150 flex flex-col items-center justify-center select-none">
               <div className="bg-white p-3 rounded-xl shadow border border-slate-100 relative">
-                {/* Simulated high fidelity QRIS code using placeholder vector SVG */}
-                <svg className="w-40 h-40 text-slate-900" viewBox="0 0 100 100" fill="currentColor">
-                  {/* Outer border boxes */}
-                  <rect x="5" y="5" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="6" />
-                  <rect x="10" y="10" width="10" height="10" />
-                  
-                  <rect x="75" y="5" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="6" />
-                  <rect x="80" y="10" width="10" height="10" />
-                  
-                  <rect x="5" y="75" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="6" />
-                  <rect x="10" y="80" width="10" height="10" />
-                  
-                  {/* Simulated standard barcode noise blocks */}
-                  <rect x="35" y="10" width="10" height="15" />
-                  <rect x="55" y="10" width="15" height="5" />
-                  <rect x="50" y="25" width="20" height="10" />
-                  <rect x="10" y="35" width="15" height="10" />
-                  <rect x="30" y="40" width="30" height="25" />
-                  <rect x="70" y="45" width="20" height="15" />
-                  <rect x="75" y="70" width="15" height="20" />
-                  <rect x="35" y="75" width="20" height="10" />
-                  <rect x="60" y="85" width="10" height="5" />
-                  {/* Central QRIS ID logo */}
-                  <rect x="42" y="42" width="16" height="16" rx="3" fill="#D32F2F" />
-                  <circle cx="50" cy="50" r="3" fill="white" />
-                </svg>
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-1.5 py-0.5 rounded text-[8px] font-black text-[#D32F2F] border border-red-200">
-                  QRIS
-                </div>
+                {settings?.qrisUrl ? (
+                  <img 
+                    src={settings.qrisUrl} 
+                    alt="QRIS Barcode" 
+                    className="w-40 h-40 object-contain rounded"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <>
+                    {/* Simulated high fidelity QRIS code using placeholder vector SVG */}
+                    <svg className="w-40 h-40 text-slate-900" viewBox="0 0 100 100" fill="currentColor">
+                      {/* Outer border boxes */}
+                      <rect x="5" y="5" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="6" />
+                      <rect x="10" y="10" width="10" height="10" />
+                      
+                      <rect x="75" y="5" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="6" />
+                      <rect x="80" y="10" width="10" height="10" />
+                      
+                      <rect x="5" y="75" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="6" />
+                      <rect x="10" y="80" width="10" height="10" />
+                      
+                      {/* Simulated standard barcode noise blocks */}
+                      <rect x="35" y="10" width="10" height="15" />
+                      <rect x="55" y="10" width="15" height="5" />
+                      <rect x="50" y="25" width="20" height="10" />
+                      <rect x="10" y="35" width="15" height="10" />
+                      <rect x="30" y="40" width="30" height="25" />
+                      <rect x="70" y="45" width="20" height="15" />
+                      <rect x="75" y="70" width="15" height="20" />
+                      <rect x="35" y="75" width="20" height="10" />
+                      <rect x="60" y="85" width="10" height="5" />
+                      {/* Central QRIS ID logo */}
+                      <rect x="42" y="42" width="16" height="16" rx="3" fill="#D32F2F" />
+                      <circle cx="50" cy="50" r="3" fill="white" />
+                    </svg>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-1.5 py-0.5 rounded text-[8px] font-black text-[#D32F2F] border border-red-200">
+                      QRIS
+                    </div>
+                  </>
+                )}
               </div>
               <span className="text-[9px] font-mono font-bold text-slate-700 tracking-wider mt-2">ID NEGARA: ID1026045500</span>
             </div>

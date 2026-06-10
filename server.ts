@@ -112,6 +112,81 @@ app.post('/api/extract-receipt', async (req, res) => {
   }
 });
 
+// Secure server-side proxy route for sending invoice emails via Resend
+app.post('/api/send-email', async (req, res) => {
+  try {
+    const { to, subject, html, companyName, invoiceNumber } = req.body;
+    if (!to || !subject || !html) {
+      return res.status(400).json({ success: false, error: 'Parameter "to", "subject", dan "html" wajib diisi.' });
+    }
+
+    const apiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
+    if (apiKey) {
+      console.log(`[Email Service] Attempting to send real email to ${to} using Resend API Key...`);
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          from: `${companyName || 'FORSDIG'} <onboarding@resend.dev>`,
+          to: [to],
+          subject: subject,
+          html: html,
+        }),
+      });
+
+      if (response.ok) {
+        console.log(`[Email Service] Resend API success sending email to ${to}`);
+        return res.json({ success: true, sandbox: false });
+      } else {
+        const errData: any = await response.json().catch(() => ({}));
+        console.error(`[Email Service] Resend API error:`, errData);
+        return res.status(response.status).json({
+          success: false,
+          sandbox: false,
+          error: errData.message || `HTTP ${response.status} dari Resend API`,
+        });
+      }
+    } else {
+      console.log(`[Email Service] No Resend API Key found. Falling back to HTTPBin Sandbox for ${to}...`);
+      const response = await fetch('https://httpbin.org/post', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipient: to,
+          subject: subject,
+          payload_html: html,
+          invoice: invoiceNumber || 'N/A',
+          system: 'FORSDIG ERP Automatic Email Engine (Backend Sandbox)',
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      if (response.ok) {
+        console.log(`[Email Service] Sandbox flow success for ${to}`);
+        return res.json({ success: true, sandbox: true });
+      } else {
+        console.error(`[Email Service] Sandbox flow failed with status ${response.status}`);
+        return res.status(response.status).json({
+          success: false,
+          sandbox: true,
+          error: `HTTP ${response.status} dari Sandbox (httpbin)`,
+        });
+      }
+    }
+  } catch (error: any) {
+    console.error('[Email Service] Error dispatching email:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Kegagalan layanan internal server saat mengirim email.',
+    });
+  }
+});
+
 // Configure Vite as middleware in development or serve built production files
 async function setupVite() {
   if (process.env.NODE_ENV !== 'production') {

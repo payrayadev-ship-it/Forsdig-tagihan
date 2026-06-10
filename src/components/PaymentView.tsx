@@ -18,6 +18,12 @@ export const PaymentView: React.FC = () => {
   const [qrisSearch, setQrisSearch] = useState('');
   const [useManualQris, setUseManualQris] = useState(false);
 
+  useEffect(() => {
+    if (settings?.qrisUrl) {
+      setUseManualQris(true);
+    }
+  }, [settings?.qrisUrl]);
+
   // Keep latest payments list to avoid React stale closure trap in interval
   const paymentsRef = useRef(payments);
   useEffect(() => {
@@ -346,6 +352,7 @@ export const PaymentView: React.FC = () => {
                             setQrisInvoice(inv);
                             setQrisSuccess(false);
                             setQrisProcessing(false);
+                            setUseManualQris(!!settings?.qrisUrl);
                           }}
                           className="flex items-center space-x-1 py-1 px-3 bg-red-650 hover:bg-red-750 text-white rounded-lg text-[10px] font-extrabold shadow cursor-pointer transition-all"
                         >
