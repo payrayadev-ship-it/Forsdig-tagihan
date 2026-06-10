@@ -53,25 +53,35 @@ export const InvoiceView: React.FC = () => {
 
   // Modal selector for products inside form
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [manualItemName, setManualItemName] = useState('');
   const [qty, setQty] = useState(1);
   const [customPrice, setCustomPrice] = useState(0);
   const [customDiscount, setCustomDiscount] = useState(0);
 
   // Add Item to current building list
   const handleAddItem = () => {
-    if (!selectedProduct) return;
+    if (!selectedProduct && !manualItemName.trim()) {
+      alert("Harap pilih Produk dari Katalog atau ketik Nama Produk/Jasa secara manual!");
+      return;
+    }
 
-    const basePrice = customPrice > 0 ? customPrice : selectedProduct.price;
-    const taxMod = selectedProduct.tax;
+    const itemName = selectedProduct ? selectedProduct.name : manualItemName.trim();
+    const basePrice = customPrice > 0 ? customPrice : (selectedProduct ? selectedProduct.price : 0);
+    const taxMod = selectedProduct ? selectedProduct.tax : 0; // default tax is 0% for manual items
     
+    if (basePrice <= 0) {
+      alert("Harap tentukan/masukkan Tarif Harga (IDR) yang valid (lebih besar dari 0)!");
+      return;
+    }
+
     // Tax computation
     const totalTaxable = (basePrice * qty) - customDiscount;
     const taxAmt = Math.max(0, totalTaxable * (taxMod / 100));
     const lineTotal = totalTaxable + taxAmt;
 
     const newItem: InvoiceItem = {
-      productId: selectedProduct.productId,
-      name: selectedProduct.name,
+      productId: selectedProduct ? selectedProduct.productId : `manual-${Date.now()}`,
+      name: itemName,
       qty,
       price: basePrice,
       tax: taxMod,
@@ -81,6 +91,7 @@ export const InvoiceView: React.FC = () => {
 
     setItems(prev => [...prev, newItem]);
     setSelectedProduct(null);
+    setManualItemName('');
     setQty(1);
     setCustomPrice(0);
     setCustomDiscount(0);
@@ -93,7 +104,14 @@ export const InvoiceView: React.FC = () => {
   // Submit Invoice Form
   const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customer || items.length === 0) return;
+    if (!customer) {
+      alert("Gagal menyimpan: Harap pilih pelanggan / instansi terlebih dahulu!");
+      return;
+    }
+    if (items.length === 0) {
+      alert("Gagal menyimpan: Harap tambahkan minimal 1 item rincian produk/jasa ke dalam daftar!");
+      return;
+    }
 
     const subtotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
     const totalItemsDiscount = items.reduce((sum, item) => sum + item.discount, 0);
@@ -112,78 +130,85 @@ export const InvoiceView: React.FC = () => {
 
     const calculatedTotal = Math.max(0, baseTaxable + ppnAmount - pphAmount);
 
-    const calculatedInvoice = await addInvoice({
-      customerId: customer.id,
-      customerName: `${customer.name} - ${customer.company}`,
-      invoiceDate,
-      dueDate,
-      subtotal,
-      discount: totalItemsDiscount + discount,
-      tax: totalTax,
-      ppnAmount,
-      pphAmount,
-      total: calculatedTotal,
-      notes,
-      items,
-      status
-    });
+    try {
+      const calculatedInvoice = await addInvoice({
+        customerId: customer.id,
+        customerName: `${customer.name} - ${customer.company}`,
+        invoiceDate,
+        dueDate,
+        subtotal,
+        discount: totalItemsDiscount + discount,
+        tax: totalTax,
+        ppnAmount,
+        pphAmount,
+        total: calculatedTotal,
+        notes,
+        items,
+        status
+      });
 
-    // Automatically dispatch email to customer if status is NOT Draft (published/diterbitkan)
-    if (status !== 'Draft' && customer.email) {
-      const emailSubjectAuto = `[TAGIHAN RESMI] Invoice #${calculatedInvoice.invoiceNumber} - ${settings.companyName || 'FORSDIG'}`;
-      const itemDetailsAuto = (items || [])
-        .map(itm => `- ${itm.name || 'Layanan'} (${itm.qty} x Rp ${itm.price.toLocaleString('id-ID')})`)
-        .join('\n');
-      const formattedAmtAuto = calculatedTotal.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+      // Automatically dispatch email to customer if status is NOT Draft (published/diterbitkan)
+      if (status !== 'Draft' && customer.email) {
+        const emailSubjectAuto = `[TAGIHAN RESMI] Invoice #${calculatedInvoice.invoiceNumber} - ${settings.companyName || 'FORSDIG'}`;
+        const itemDetailsAuto = (items || [])
+          .map(itm => `- ${itm.name || 'Layanan'} (${itm.qty} x Rp ${itm.price.toLocaleString('id-ID')})`)
+          .join('\n');
+        const formattedAmtAuto = calculatedTotal.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 
-      const emailMessageAuto = `Yth. ${customer.name},\n\n` +
-        `Bersama surat elektronik ini, kami menginformasikan bahwa tagihan resmi Invoice #${calculatedInvoice.invoiceNumber} dari ${settings.companyName || 'FORSDIG'} telah DITERBITKAN secara otomatis dengan rincian berikut:\n\n` +
-        `Ringkasan Item:\n${itemDetailsAuto}\n\n` +
-        `Total Tagihan: ${formattedAmtAuto}\n` +
-        `Tanggal Jatuh Tempo: ${dueDate}\n\n` +
-        `Pembayaran dapat ditransfer ke rekening bank resmi kami yang tercantum pada dokumen penagihan.\n\n` +
-        `Unduh Dokumen PDF & Scan QRIS:\n` +
-        `Link akses digital tagihan Anda terlampir otomatis. Silakan hubungi kami apabila ada pertanyaan rincian pengerjaan.\n\n` +
-        `Terima kasih atas kerja samanya.\n\n` +
-        `Salam hangat,\n` +
-        `Divisi Keuangan - ${settings.companyName || 'FORSDIG'}`;
+        const emailMessageAuto = `Yth. ${customer.name},\n\n` +
+          `Bersama surat elektronik ini, kami menginformasikan bahwa tagihan resmi Invoice #${calculatedInvoice.invoiceNumber} dari ${settings.companyName || 'FORSDIG'} telah DITERBITKAN secara otomatis dengan rincian berikut:\n\n` +
+          `Ringkasan Item:\n${itemDetailsAuto}\n\n` +
+          `Total Tagihan: ${formattedAmtAuto}\n` +
+          `Tanggal Jatuh Tempo: ${dueDate}\n\n` +
+          `Pembayaran dapat ditransfer ke rekening bank resmi kami yang tercantum pada dokumen penagihan.\n\n` +
+          `Unduh Dokumen PDF & Scan QRIS:\n` +
+          `Link akses digital tagihan Anda terlampir otomatis. Silakan hubungi kami apabila ada pertanyaan rincian pengerjaan.\n\n` +
+          `Terima kasih atas kerja samanya.\n\n` +
+          `Salam hangat,\n` +
+          `Divisi Keuangan - ${settings.companyName || 'FORSDIG'}`;
 
-      try {
-        const dispatchRes = await dispatchExternalEmail(
-          customer.email,
-          emailSubjectAuto,
-          emailMessageAuto,
-          calculatedInvoice.invoiceNumber
-        );
+        try {
+          const dispatchRes = await dispatchExternalEmail(
+            customer.email,
+            emailSubjectAuto,
+            emailMessageAuto,
+            calculatedInvoice.invoiceNumber
+          );
 
-        if (dispatchRes.success) {
-          const typeLog = dispatchRes.sandbox ? " (Sandbox Mode)" : " (Resend API)";
-          if (logActivity) {
-            await logActivity(
-              `[Auto-Kirim] Tagihan ${calculatedInvoice.invoiceNumber} terkirim otomatis ke ${customer.email}${typeLog}`,
-              'Komunikasi_Email'
-            );
+          if (dispatchRes.success) {
+            const typeLog = dispatchRes.sandbox ? " (Sandbox Mode)" : " (Resend API)";
+            if (logActivity) {
+              await logActivity(
+                `[Auto-Kirim] Tagihan ${calculatedInvoice.invoiceNumber} terkirim otomatis ke ${customer.email}${typeLog}`,
+                'Komunikasi_Email'
+              );
+            }
+            if (addNotification) {
+              await addNotification(
+                `Auto-Email Terkirim`,
+                `Invoice ${calculatedInvoice.invoiceNumber} diterbitkan & email otomatis sukses dikirim ke ${customer.email}.`,
+                'success'
+              );
+            }
           }
-          if (addNotification) {
-            await addNotification(
-              `Auto-Email Terkirim`,
-              `Invoice ${calculatedInvoice.invoiceNumber} diterbitkan & email otomatis sukses dikirim ke ${customer.email}.`,
-              'success'
-            );
-          }
+        } catch (errAuto) {
+          console.error("Gagal mengirim email otomatis:", errAuto);
         }
-      } catch (errAuto) {
-        console.error("Gagal mengirim email otomatis:", errAuto);
       }
-    }
 
-    // Reset Form
-    setCustomer(null);
-    setItems([]);
-    setDiscount(0);
-    setNotes('');
-    setStatus('Draft');
-    setActiveSubTab('list');
+      alert(`Berhasil menyimpan! Invoice #${calculatedInvoice.invoiceNumber} telah tersimpan dengan status: ${status}`);
+
+      // Reset Form
+      setCustomer(null);
+      setItems([]);
+      setDiscount(0);
+      setNotes('');
+      setStatus('Draft');
+      setActiveSubTab('list');
+    } catch (saveError) {
+      console.error("Error saving invoice:", saveError);
+      alert("Maaf, terjadi kesalahan saat menyimpan invoice. Silakan periksa kelengkapan data anda.");
+    }
   };
 
   // 1. WhatsApp Notification API simulation Link builder
@@ -648,46 +673,91 @@ export const InvoiceView: React.FC = () => {
                 <span>Rincian Produk & Jasa</span>
               </h4>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-white p-3.5 rounded-xl border border-dashed border-slate-200">
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Pilih Produk / Jasa</label>
-                  <select
-                    value={selectedProduct?.id || ''}
-                    onChange={(e) => {
-                      const prod = products.find(p => p.id === e.target.value);
-                      setSelectedProduct(prod || null);
-                      if (prod) {
-                        setCustomPrice(prod.price);
-                      }
-                    }}
-                    className="w-full border border-slate-200 outline-none p-2 text-xs rounded-lg bg-white cursor-pointer"
-                    id="form-item-selector"
-                  >
-                    <option value="">-- Pilih Jasa Catalog --</option>
-                    {products.filter(p => p.status === 'Aktif').map(p => (
-                      <option key={p.id} value={p.id}>{p.code} - {p.name} (Rp {p.price.toLocaleString()})</option>
-                    ))}
-                  </select>
+              <div className="bg-white p-4 rounded-xl border border-dashed border-slate-200 space-y-3.5">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                  {/* Select product from catalog */}
+                  <div className="md:col-span-4">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Pilih dari Katalog (Opsional)</label>
+                    <select
+                      value={selectedProduct?.id || ''}
+                      onChange={(e) => {
+                        const prod = products.find(p => p.id === e.target.value);
+                        setSelectedProduct(prod || null);
+                        if (prod) {
+                          setCustomPrice(prod.price);
+                          setManualItemName(prod.name);
+                        } else {
+                          setCustomPrice(0);
+                          setManualItemName('');
+                        }
+                      }}
+                      className="w-full border border-slate-200 outline-none p-2 text-xs rounded-lg bg-white cursor-pointer"
+                      id="form-item-selector"
+                    >
+                      <option value="">-- Secara Manual / Tanpa Katalog --</option>
+                      {products.filter(p => p.status === 'Aktif').map(p => (
+                        <option key={p.id} value={p.id}>{p.code} - {p.name} (Rp {p.price.toLocaleString()})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Manual name custom text */}
+                  <div className="md:col-span-4">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Produk / Jasa Deskripsi *</label>
+                    <input
+                      type="text"
+                      placeholder="Masukkan nama produk atau deskripsi jasa manually..."
+                      value={manualItemName}
+                      onChange={(e) => setManualItemName(e.target.value)}
+                      className="w-full border border-slate-200 outline-none p-2 text-xs rounded-lg placeholder-slate-400"
+                      id="form-item-manual-name"
+                    />
+                  </div>
+
+                  {/* Price input override */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Harga Jasa (Rp) *</label>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      value={customPrice || ''}
+                      onChange={(e) => setCustomPrice(Number(e.target.value))}
+                      className="w-full border border-slate-200 outline-none p-2 text-xs rounded-lg font-mono font-bold"
+                      id="form-item-price"
+                    />
+                  </div>
+
+                  {/* Qty */}
+                  <div className="md:col-span-1">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qty</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={qty}
+                      onChange={(e) => setQty(Number(e.target.value))}
+                      className="w-full border border-slate-200 outline-none p-2 text-xs rounded-lg font-mono"
+                      id="form-item-qty"
+                    />
+                  </div>
+
+                  {/* Add action */}
+                  <div className="md:col-span-1">
+                    <button
+                      type="button"
+                      onClick={handleAddItem}
+                      className="w-full py-2 bg-gradient-to-r from-[#D32F2F] to-rose-600 hover:from-red-700 hover:to-rose-700 text-white rounded-lg text-xs font-bold transition shadow"
+                      id="add-item-to-list"
+                    >
+                      Tambah
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Kuantitas</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={qty}
-                    onChange={(e) => setQty(Number(e.target.value))}
-                    className="w-full border border-slate-200 outline-none p-1.5 text-xs rounded-lg"
-                    id="form-item-qty"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  className="py-2 px-4 bg-slate-900 border border-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-black text-center"
-                  id="add-item-to-list"
-                >
-                  Tambah Baris
-                </button>
+                {/* Visual helper banner */}
+                <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                  <Sparkles size={11} className="text-amber-500 animate-pulse" />
+                  <span>Anda dapat mengkombinasikan katalog jasa resmi dengan menginput item kustom secara manual di atas.</span>
+                </span>
               </div>
 
               {/* Items Lines List Table */}

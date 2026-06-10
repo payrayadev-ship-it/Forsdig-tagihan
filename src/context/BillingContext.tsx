@@ -88,6 +88,14 @@ const DEFAULT_CATEGORIES: ProductCategory[] = [
 
 const DEFAULT_USERS: (UserProfile & { id: string })[] = [
   {
+    id: 'demo-payrayadev',
+    userId: 'demo-payrayadev',
+    email: 'payrayadev@gmail.com',
+    name: 'Royan Payraya (CEO)',
+    role: 'Super Admin',
+    status: 'Aktif',
+  },
+  {
     id: 'demo-super',
     userId: 'demo-super',
     email: 'super@forsdig.id',
@@ -476,9 +484,23 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Auth Operations
   const login = async (email: string, password: string) => {
     if (isDemoMode) {
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      let user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
       if (!user) {
-        throw new Error('Alamat email tidak ditemukan.');
+        // Automatically register the user on-the-fly in demo mode to prevent any login blockers!
+        const username = email.split('@')[0];
+        const cleanName = username.split(/[._-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        const newUser: UserProfile & { id: string } = {
+          id: `demo-${Date.now()}`,
+          userId: `demo-${Date.now()}`,
+          email: email.toLowerCase(),
+          name: cleanName || 'Pengguna Baru',
+          role: 'Super Admin',
+          status: 'Aktif',
+        };
+        const updatedUsers = [...users, newUser];
+        setUsers(updatedUsers);
+        localStorage.setItem('forsdig_users', JSON.stringify(updatedUsers));
+        user = newUser;
       }
       setCurrentUser(user);
       setIsDemoMode(true);
