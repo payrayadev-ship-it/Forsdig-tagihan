@@ -149,6 +149,15 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [settings, setSettings] = useState<SystemSetting>(DUMMY_SETTING);
   const [users, setUsers] = useState<(UserProfile & { id: string })[]>([]);
 
+  // Path resolution helper for absolute data segregation
+  const getUserColPath = (col: string) => {
+    if (isDemoMode || !currentUser?.userId) {
+      return col;
+    }
+    if (col === 'users') return 'users';
+    return `users/${currentUser.userId}/${col}`;
+  };
+
   // 1. Auth states sync with Firebase
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -208,22 +217,21 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => unsub();
   }, []);
 
-  // 1b. Ensure collections exist and are initialized with proper data types
+  // 1b. Ensure collections exist and are initialized with proper data types inside user sandbox
   const ensureCollectionsSetup = async () => {
-    if (isDemoMode) return;
+    if (isDemoMode || !currentUser?.userId) return;
     try {
-      console.log("[Setup] Checking Firestore collections initialization and proper data types...");
-      
-      // 1. Settings Init & Casting check
-      const settingsSnap = await getDocs(collection(db, 'settings'));
+      console.log("[Setup] Checking Firestore user-sandbox collections initialization...");
+      const targetSettingsPath = getUserColPath('settings');
+      const settingsSnap = await getDocs(collection(db, targetSettingsPath));
       if (settingsSnap.empty) {
         const defaultSetting = { ...DUMMY_SETTING };
-        await setDoc(doc(db, 'settings', defaultSetting.id), defaultSetting);
-        console.log("[Setup] Initialized global settings collection with proper types.");
+        await setDoc(doc(db, targetSettingsPath, defaultSetting.id), defaultSetting);
+        console.log("[Setup] Initialized user settings collection in tenant space.");
       }
 
-      // 2. Cash Accounts Init & Casting check
-      const cashSnap = await getDocs(collection(db, 'cash_accounts'));
+      const targetCashPath = getUserColPath('cash_accounts');
+      const cashSnap = await getDocs(collection(db, targetCashPath));
       if (cashSnap.empty) {
         for (const account of DUMMY_CASH_ACCOUNTS) {
           const typedAccount = {
@@ -231,23 +239,23 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             balance: Number(account.balance),
             createdAt: account.createdAt || new Date().toISOString()
           };
-          await setDoc(doc(db, 'cash_accounts', account.id), typedAccount);
+          await setDoc(doc(db, targetCashPath, account.id), typedAccount);
         }
-        console.log("[Setup] Initialized cash/bank accounts with proper double/decimal values.");
+        console.log("[Setup] Initialized user cash/bank accounts in tenant space.");
       }
 
-      // 3. Product Categories Init & Casting check
-      const categorySnap = await getDocs(collection(db, 'product_categories'));
+      const targetCatPath = getUserColPath('product_categories');
+      const categorySnap = await getDocs(collection(db, targetCatPath));
       if (categorySnap.empty) {
         for (const cat of DEFAULT_CATEGORIES) {
-          await setDoc(doc(db, 'product_categories', cat.id), cat);
+          await setDoc(doc(db, targetCatPath, cat.id), cat);
         }
-        console.log("[Setup] Initialized default categories for inventory items.");
+        console.log("[Setup] Initialized default categories inside user space.");
       }
       
-      console.log("[Setup] Firestore schemas and collection records successfully validated.");
+      console.log("[Setup] Firestore user-sandbox schemas successfully validated.");
     } catch (err) {
-      console.warn("[Setup] Optional auto-initialization verification completed. This is expected if Firestore rules restrict startup index queries or are pending admin activation.", err);
+      console.warn("[Setup] Optional auto-initialization verification completed.", err);
     }
   };
 
@@ -282,52 +290,54 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSettings(localSet ? JSON.parse(localSet) : DUMMY_SETTING);
       setUsers(localUsers ? JSON.parse(localUsers) : DEFAULT_USERS);
     } else {
-      // Connect to full real-time Firestore listeners
+      // Wait for complete authenticated user profile initialization before loading subcollections
+      if (!currentUser?.userId) return;
+
       ensureCollectionsSetup();
       const unsubs = [
-        onSnapshot(collection(db, 'users'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('users')), (snap) => {
           setUsers(snap.docs.map(d => ({ id: d.id, userId: d.id, ...d.data() } as UserProfile & { id: string })));
         }, err => handleFirestoreError(err, OperationType.LIST, 'users')),
-        onSnapshot(collection(db, 'product_categories'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('product_categories')), (snap) => {
           setProductCategories(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProductCategory)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'product_categories')),
-        onSnapshot(collection(db, 'customers'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('customers')), (snap) => {
           setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'customers')),
         
-        onSnapshot(collection(db, 'products'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('products')), (snap) => {
           setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'products')),
 
-        onSnapshot(collection(db, 'invoices'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('invoices')), (snap) => {
           setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() } as Invoice)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'invoices')),
 
-        onSnapshot(collection(db, 'payments'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('payments')), (snap) => {
           setPayments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'payments')),
 
-        onSnapshot(collection(db, 'expenses'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('expenses')), (snap) => {
           setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'expenses')),
 
-        onSnapshot(collection(db, 'cash_accounts'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('cash_accounts')), (snap) => {
           setCashAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() } as CashAccount)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'cash_accounts')),
 
-        onSnapshot(collection(db, 'receivables'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('receivables')), (snap) => {
           setReceivables(snap.docs.map(d => ({ id: d.id, ...d.data() } as Receivable)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'receivables')),
 
-        onSnapshot(collection(db, 'notifications'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('notifications')), (snap) => {
           setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as SystemNotification)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'notifications')),
 
-        onSnapshot(collection(db, 'activity_logs'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('activity_logs')), (snap) => {
           setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'activity_logs')),
 
-        onSnapshot(collection(db, 'settings'), (snap) => {
+        onSnapshot(collection(db, getUserColPath('settings')), (snap) => {
           if (!snap.empty) {
             setSettings({ id: snap.docs[0].id, ...snap.docs[0].data() } as SystemSetting);
           }
@@ -338,7 +348,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         unsubs.forEach(un => un());
       };
     }
-  }, [isDemoMode]);
+  }, [isDemoMode, currentUser?.userId]);
 
   // Sync state to local storage when in Demo mode
   useEffect(() => {
@@ -385,7 +395,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLogs(prev => [newLog, ...prev]);
     } else {
       try {
-        await setDoc(doc(db, 'activity_logs', newLog.id), newLog);
+        await setDoc(doc(db, getUserColPath('activity_logs'), newLog.id), newLog);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `activity_logs/${newLog.id}`);
       }
@@ -409,7 +419,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setNotifications(prev => [newNotif, ...prev]);
     } else {
       try {
-        await setDoc(doc(db, 'notifications', newNotif.id), newNotif);
+        await setDoc(doc(db, getUserColPath('notifications'), newNotif.id), newNotif);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `notifications/${newNotif.id}`);
       }
@@ -421,7 +431,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
     } else {
       try {
-        await setDoc(doc(db, 'notifications', id), { isRead: true }, { merge: true });
+        await setDoc(doc(db, getUserColPath('notifications'), id), { isRead: true }, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `notifications/${id}`);
       }
@@ -448,30 +458,30 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const batch = writeBatch(db);
         
         DUMMY_CUSTOMERS.forEach(cust => {
-          batch.set(doc(db, 'customers', cust.id), cust);
+          batch.set(doc(db, getUserColPath('customers'), cust.id), cust);
         });
         DUMMY_PRODUCTS.forEach(prod => {
-          batch.set(doc(db, 'products', prod.id), prod);
+          batch.set(doc(db, getUserColPath('products'), prod.id), prod);
         });
         DEFAULT_CATEGORIES.forEach(cat => {
-          batch.set(doc(db, 'product_categories', cat.id), cat);
+          batch.set(doc(db, getUserColPath('product_categories'), cat.id), cat);
         });
         DUMMY_INVOICES.forEach(inv => {
-          batch.set(doc(db, 'invoices', inv.id), inv);
+          batch.set(doc(db, getUserColPath('invoices'), inv.id), inv);
         });
         DUMMY_PAYMENTS.forEach(pay => {
-          batch.set(doc(db, 'payments', pay.id), pay);
+          batch.set(doc(db, getUserColPath('payments'), pay.id), pay);
         });
         DUMMY_EXPENSES.forEach(exp => {
-          batch.set(doc(db, 'expenses', exp.id), exp);
+          batch.set(doc(db, getUserColPath('expenses'), exp.id), exp);
         });
         DUMMY_CASH_ACCOUNTS.forEach(cash => {
-          batch.set(doc(db, 'cash_accounts', cash.id), cash);
+          batch.set(doc(db, getUserColPath('cash_accounts'), cash.id), cash);
         });
         DUMMY_RECEIVABLES.forEach(rec => {
-          batch.set(doc(db, 'receivables', rec.id), rec);
+          batch.set(doc(db, getUserColPath('receivables'), rec.id), rec);
         });
-        batch.set(doc(db, 'settings', DUMMY_SETTING.id), DUMMY_SETTING);
+        batch.set(doc(db, getUserColPath('settings'), DUMMY_SETTING.id), DUMMY_SETTING);
 
         await batch.commit();
         await logActivity('Melakukan seeding data awal ke Cloud Firestore', 'Sistem');
@@ -639,7 +649,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setCustomers(prev => [...prev, newCust]);
     } else {
       try {
-        await setDoc(doc(db, 'customers', id), newCust);
+        await setDoc(doc(db, getUserColPath('customers'), id), newCust);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `customers/${id}`);
       }
@@ -655,7 +665,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...data, updatedAt: timestamp } : c));
     } else {
       try {
-        await setDoc(doc(db, 'customers', id), { ...data, updatedAt: timestamp }, { merge: true });
+        await setDoc(doc(db, getUserColPath('customers'), id), { ...data, updatedAt: timestamp }, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `customers/${id}`);
       }
@@ -669,7 +679,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setCustomers(prev => prev.filter(c => c.id !== id));
     } else {
       try {
-        await deleteDoc(doc(db, 'customers', id));
+        await deleteDoc(doc(db, getUserColPath('customers'), id));
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `customers/${id}`);
       }
@@ -691,7 +701,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setProducts(prev => [...prev, newProduct]);
     } else {
       try {
-        await setDoc(doc(db, 'products', id), newProduct);
+        await setDoc(doc(db, getUserColPath('products'), id), newProduct);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `products/${id}`);
       }
@@ -712,7 +722,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setProducts(prev => prev.map(p => p.id === id ? { ...p, ...cleanedData } : p));
     } else {
       try {
-        await setDoc(doc(db, 'products', id), cleanedData, { merge: true });
+        await setDoc(doc(db, getUserColPath('products'), id), cleanedData, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `products/${id}`);
       }
@@ -725,7 +735,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setProducts(prev => prev.filter(p => p.id !== id));
     } else {
       try {
-        await deleteDoc(doc(db, 'products', id));
+        await deleteDoc(doc(db, getUserColPath('products'), id));
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
       }
@@ -741,7 +751,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setProductCategories(prev => [...prev, newCategory]);
     } else {
       try {
-        await setDoc(doc(db, 'product_categories', id), newCategory);
+        await setDoc(doc(db, getUserColPath('product_categories'), id), newCategory);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `product_categories/${id}`);
       }
@@ -754,7 +764,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setProductCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c));
     } else {
       try {
-        await setDoc(doc(db, 'product_categories', id), { name }, { merge: true });
+        await setDoc(doc(db, getUserColPath('product_categories'), id), { name }, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `product_categories/${id}`);
       }
@@ -767,7 +777,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setProductCategories(prev => prev.filter(c => c.id !== id));
     } else {
       try {
-        await deleteDoc(doc(db, 'product_categories', id));
+        await deleteDoc(doc(db, getUserColPath('product_categories'), id));
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `product_categories/${id}`);
       }
@@ -813,7 +823,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setInvoices(prev => [...prev, newInvoice]);
     } else {
       try {
-        await setDoc(doc(db, 'invoices', id), newInvoice);
+        await setDoc(doc(db, getUserColPath('invoices'), id), newInvoice);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `invoices/${id}`);
       }
@@ -840,7 +850,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setReceivables(prev => [...prev, newRec]);
       } else {
         try {
-          await setDoc(doc(db, 'receivables', recId), newRec);
+          await setDoc(doc(db, getUserColPath('receivables'), recId), newRec);
         } catch (err) {
           handleFirestoreError(err, OperationType.WRITE, `receivables/${recId}`);
         }
@@ -867,7 +877,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setInvoices(prev => prev.map(i => i.id === id ? updatedInvoice : i));
     } else {
       try {
-        await setDoc(doc(db, 'invoices', id), updatedInvoice, { merge: true });
+        await setDoc(doc(db, getUserColPath('invoices'), id), updatedInvoice, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `invoices/${id}`);
       }
@@ -883,7 +893,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setReceivables(prev => prev.filter(r => r.invoiceId !== id));
         } else {
           try {
-            await deleteDoc(doc(db, 'receivables', relatedRec.id));
+            await deleteDoc(doc(db, getUserColPath('receivables'), relatedRec.id));
           } catch (err) {
             handleFirestoreError(err, OperationType.DELETE, `receivables/${relatedRec.id}`);
           }
@@ -905,7 +915,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setReceivables(prev => prev.map(r => r.invoiceId === id ? updatedRec : r));
         } else {
           try {
-            await setDoc(doc(db, 'receivables', relatedRec.id), updatedRec, { merge: true });
+            await setDoc(doc(db, getUserColPath('receivables'), relatedRec.id), updatedRec, { merge: true });
           } catch (err) {
             handleFirestoreError(err, OperationType.UPDATE, `receivables/${relatedRec.id}`);
           }
@@ -929,7 +939,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setReceivables(prev => [...prev, newRec]);
         } else {
           try {
-            await setDoc(doc(db, 'receivables', recId), newRec);
+            await setDoc(doc(db, getUserColPath('receivables'), recId), newRec);
           } catch (err) {
             handleFirestoreError(err, OperationType.WRITE, `receivables/${recId}`);
           }
@@ -950,7 +960,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setInvoices(prev => prev.map(i => i.id === id ? { ...i, status, updatedAt: timestamp } : i));
     } else {
       try {
-        await setDoc(doc(db, 'invoices', id), { status, updatedAt: timestamp }, { merge: true });
+        await setDoc(doc(db, getUserColPath('invoices'), id), { status, updatedAt: timestamp }, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `invoices/${id}`);
       }
@@ -964,7 +974,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setReceivables(prev => prev.filter(r => r.invoiceId !== id));
       } else {
         try {
-          await deleteDoc(doc(db, 'receivables', relatedRec.id));
+          await deleteDoc(doc(db, getUserColPath('receivables'), relatedRec.id));
         } catch (err) {
           handleFirestoreError(err, OperationType.DELETE, `receivables/${relatedRec.id}`);
         }
@@ -981,10 +991,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setReceivables(prev => prev.filter(r => r.invoiceId !== id));
     } else {
       try {
-        await deleteDoc(doc(db, 'invoices', id));
+        await deleteDoc(doc(db, getUserColPath('invoices'), id));
         const relatedRec = receivables.find(r => r.invoiceId === id);
         if (relatedRec) {
-          await deleteDoc(doc(db, 'receivables', relatedRec.id));
+          await deleteDoc(doc(db, getUserColPath('receivables'), relatedRec.id));
         }
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `invoices/${id}`);
@@ -1014,7 +1024,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'Jatuh Tempo', updatedAt: timestamp } : i));
         } else {
           try {
-            await setDoc(doc(db, 'invoices', inv.id), { status: 'Jatuh Tempo', updatedAt: timestamp }, { merge: true });
+            await setDoc(doc(db, getUserColPath('invoices'), inv.id), { status: 'Jatuh Tempo', updatedAt: timestamp }, { merge: true });
           } catch (e) {
             console.error("Auto transition overdue error:", e);
           }
@@ -1102,7 +1112,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setPayments(prev => [...prev, newPayment]);
     } else {
       try {
-        await setDoc(doc(db, 'payments', id), newPayment);
+        await setDoc(doc(db, getUserColPath('payments'), id), newPayment);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `payments/${id}`);
       }
@@ -1123,7 +1133,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setPayments(prev => prev.map(p => p.id === id ? { ...p, isValidated: true, updatedAt: timestamp } : p));
     } else {
       try {
-        await setDoc(doc(db, 'payments', id), { isValidated: true, updatedAt: timestamp }, { merge: true });
+        await setDoc(doc(db, getUserColPath('payments'), id), { isValidated: true, updatedAt: timestamp }, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `payments/${id}`);
       }
@@ -1139,7 +1149,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, paidAmount: newPaid, status, updatedAt: timestamp } : i));
       } else {
         try {
-          await setDoc(doc(db, 'invoices', invoice.id), { paidAmount: newPaid, status, updatedAt: timestamp }, { merge: true });
+          await setDoc(doc(db, getUserColPath('invoices'), invoice.id), { paidAmount: newPaid, status, updatedAt: timestamp }, { merge: true });
         } catch (err) {
           handleFirestoreError(err, OperationType.UPDATE, `invoices/${invoice.id}`);
         }
@@ -1155,7 +1165,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setReceivables(prev => prev.filter(r => r.invoiceId !== invoice.id));
           } else {
             try {
-              await deleteDoc(doc(db, 'receivables', relatedRec.id));
+              await deleteDoc(doc(db, getUserColPath('receivables'), relatedRec.id));
             } catch (err) {
               handleFirestoreError(err, OperationType.DELETE, `receivables/${relatedRec.id}`);
             }
@@ -1166,7 +1176,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setReceivables(prev => prev.map(r => r.id === relatedRec.id ? { ...r, remainingAmount: newRem } : r));
           } else {
             try {
-              await setDoc(doc(db, 'receivables', relatedRec.id), { remainingAmount: newRem }, { merge: true });
+              await setDoc(doc(db, getUserColPath('receivables'), relatedRec.id), { remainingAmount: newRem }, { merge: true });
             } catch (err) {
               handleFirestoreError(err, OperationType.UPDATE, `receivables/${relatedRec.id}`);
             }
@@ -1202,7 +1212,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setExpenses(prev => [...prev, newExpense]);
     } else {
       try {
-        await setDoc(doc(db, 'expenses', id), newExpense);
+        await setDoc(doc(db, getUserColPath('expenses'), id), newExpense);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `expenses/${id}`);
       }
@@ -1225,7 +1235,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setExpenses(prev => prev.filter(e => e.id !== id));
     } else {
       try {
-        await deleteDoc(doc(db, 'expenses', id));
+        await deleteDoc(doc(db, getUserColPath('expenses'), id));
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `expenses/${id}`);
       }
@@ -1246,7 +1256,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setCashAccounts(prev => prev.map(c => c.id === id ? { ...c, balance: newBalance } : c));
     } else {
       try {
-        await setDoc(doc(db, 'cash_accounts', id), { balance: newBalance }, { merge: true });
+        await setDoc(doc(db, getUserColPath('cash_accounts'), id), { balance: newBalance }, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `cash_accounts/${id}`);
       }
@@ -1267,7 +1277,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setCashAccounts(prev => [...prev, newAcc]);
     } else {
       try {
-        await setDoc(doc(db, 'cash_accounts', id), newAcc);
+        await setDoc(doc(db, getUserColPath('cash_accounts'), id), newAcc);
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, `cash_accounts/${id}`);
       }
@@ -1294,7 +1304,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSettings(newSettings);
     } else {
       try {
-        await setDoc(doc(db, 'settings', settings.id || 'set-global'), newSettings, { merge: true });
+        await setDoc(doc(db, getUserColPath('settings'), settings.id || 'set-global'), newSettings, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `settings/${settings.id || 'set-global'}`);
       }

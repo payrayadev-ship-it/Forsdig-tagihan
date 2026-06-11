@@ -150,33 +150,10 @@ app.post('/api/send-email', async (req, res) => {
         });
       }
     } else {
-      console.log(`[Email Service] No Resend API Key found. Falling back to HTTPBin Sandbox for ${to}...`);
-      const response = await fetch('https://httpbin.org/post', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          recipient: to,
-          subject: subject,
-          payload_html: html,
-          invoice: invoiceNumber || 'N/A',
-          system: 'FORSDIG ERP Automatic Email Engine (Backend Sandbox)',
-          timestamp: new Date().toISOString(),
-        }),
-      });
-
-      if (response.ok) {
-        console.log(`[Email Service] Sandbox flow success for ${to}`);
-        return res.json({ success: true, sandbox: true });
-      } else {
-        console.error(`[Email Service] Sandbox flow failed with status ${response.status}`);
-        return res.status(response.status).json({
-          success: false,
-          sandbox: true,
-          error: `HTTP ${response.status} dari Sandbox (httpbin)`,
-        });
-      }
+      console.log(`[Email Service] No Resend API Key found. Simulating Sandbox local response for ${to}...`);
+      // Simulate slight network latency
+      await new Promise(resolve => setTimeout(resolve, 400));
+      return res.json({ success: true, sandbox: true });
     }
   } catch (error: any) {
     console.error('[Email Service] Error dispatching email:', error);
