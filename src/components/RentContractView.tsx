@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useBilling } from '../context/BillingContext';
 import { RentContract, Customer } from '../types';
-import { generateContractPDF } from '../utils/pdfGenerator';
+import { generateContractPDF, generateRentalApplicationPDF } from '../utils/pdfGenerator';
 import { 
   FileText, PenTool, CheckCircle, Send, Trash2, Mail, Phone, Clock,
   Plus, Search, User, Eye, Download, ShieldCheck, ChevronRight
@@ -105,15 +105,100 @@ export const generateSecureQrStamp = (
   return canvas.toDataURL('image/png');
 };
 
+export interface RentApplication {
+  id: string;
+  applicationId: string;
+  applicationNumber: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  customerCompany?: string;
+  propertyName: string;
+  proposalDuration: string;
+  headingTo: string;
+  proposedPrice: number;
+  purpose: string;
+  notes?: string;
+  createdAt: string;
+  status: 'Menunggu Review' | 'Diterima' | 'Ditolak';
+}
+
 export const RentContractView: React.FC = () => {
   const { 
     contracts, customers, addContract, updateContract, deleteContract, signContract,
     logActivity, addNotification, currentUser, settings
   } = useBilling();
 
-  const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'create' | 'applications'>('list');
   const [selectedContract, setSelectedContract] = useState<RentContract | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // SINKRONISASI STATE PENGAJUAN SEWA PELANGGAN (Surat Proposal Minat Sewa)
+  const [applications, setApplications] = useState<RentApplication[]>(() => {
+    const saved = localStorage.getItem('fgi_rent_applications');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Error loading applications:', e);
+      }
+    }
+    return [
+      {
+        id: 'app-1',
+        applicationId: 'app-1',
+        applicationNumber: 'REQ/20260612/0001',
+        customerId: 'cust-1',
+        customerName: 'Budi Santoso',
+        customerEmail: 'budi@sentosajaya.com',
+        customerPhone: '081234567890',
+        customerCompany: 'CV. Sentosa Jaya',
+        propertyName: 'Server Supermicro Rackmount 2U Intel Xeon Scalable',
+        proposalDuration: '12 Bulan',
+        headingTo: 'PT. Foresyndo Global Indonesia',
+        proposedPrice: 15600000,
+        purpose: 'Infrastruktur database ERP & backup mirroring produksi internal',
+        notes: 'Mohon agar diprepare OS Rocky Linux 9 dan setup bandwidth dedicated 100 Mbps.',
+        createdAt: '2026-06-11',
+        status: 'Menunggu Review'
+      },
+      {
+        id: 'app-2',
+        applicationId: 'app-2',
+        applicationNumber: 'REQ/20260610/0002',
+        customerId: 'cust-2',
+        customerName: 'Siti Aminah',
+        customerEmail: 'siti@berkahmakmur.co.id',
+        customerPhone: '081122334455',
+        customerCompany: 'CV. Berkah Makmur',
+        propertyName: 'Mesin Fotokopi Kyocera Multifungsi A3 TaskAlfa',
+        headingTo: 'PT. Foresyndo Global Indonesia',
+        proposalDuration: '6 Bulan',
+        proposedPrice: 8500000,
+        purpose: 'Operasional harian & penggandaan berkas dokumen legal kantor cabang',
+        notes: 'Harap diservis dan diganti tinta berkala setiap bulan oleh teknisi PT. FGI.',
+        createdAt: '2026-06-09',
+        status: 'Diterima'
+      }
+    ];
+  });
+
+  const [selectedApplication, setSelectedApplication] = useState<RentApplication | null>(null);
+  const [appSearchQuery, setAppSearchQuery] = useState('');
+  const [isCreatingApp, setIsCreatingApp] = useState(false);
+
+  // Form Pengajuan Sewa Baru
+  const [selectedAppCustomer, setSelectedAppCustomer] = useState<Customer | null>(null);
+  const [appPropertyName, setAppPropertyName] = useState('');
+  const [appDuration, setAppDuration] = useState('12 Bulan');
+  const [appPrice, setAppPrice] = useState('');
+  const [appPurpose, setAppPurpose] = useState('');
+  const [appNotes, setAppNotes] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('fgi_rent_applications', JSON.stringify(applications));
+  }, [applications]);
   
   // Create form state
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -142,8 +227,13 @@ export const RentContractView: React.FC = () => {
   const [deliveryStatus, setDeliveryStatus] = useState<{ email?: 'idle' | 'sending' | 'success'; wa?: 'idle' | 'sending' | 'success' }>({});
 
   useEffect(() => {
-    if (customers.length > 0 && !selectedCustomer) {
-      setSelectedCustomer(customers[0]);
+    if (customers.length > 0) {
+      if (!selectedCustomer) {
+        setSelectedCustomer(customers[0]);
+      }
+      if (!selectedAppCustomer) {
+        setSelectedAppCustomer(customers[0]);
+      }
     }
   }, [customers]);
 
@@ -180,6 +270,88 @@ export const RentContractView: React.FC = () => {
       setSelectedContract(created);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // HANDLER OPERASIONAL SURAT PENGAJUAN SEWA PELANGGAN
+  const handleCreateApplication = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppCustomer) {
+      alert('Silakan pilih pelanggan terlebih dahulu!');
+      return;
+    }
+    if (!appPropertyName || !appPrice) {
+      alert('Mohon lengkapi seluruh kolom formulir pengajuan sewa!');
+      return;
+    }
+
+    const id = `app-${Date.now()}`;
+    const nextNum = applications.length + 1;
+    const applicationNumber = `REQ/${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}/${String(nextNum).padStart(4, '0')}`;
+    const timestamp = new Date().toISOString().split('T')[0];
+
+    const newApp: RentApplication = {
+      id,
+      applicationId: id,
+      applicationNumber,
+      customerId: selectedAppCustomer.id || selectedAppCustomer.customerId,
+      customerName: selectedAppCustomer.name,
+      customerEmail: selectedAppCustomer.email,
+      customerPhone: selectedAppCustomer.phone,
+      customerCompany: selectedAppCustomer.company || 'Pribadi / Perorangan',
+      propertyName: appPropertyName,
+      proposalDuration: appDuration,
+      headingTo: 'PT. Foresyndo Global Indonesia',
+      proposedPrice: parseFloat(appPrice) || 0,
+      purpose: appPurpose || 'Kebutuhan operasional bisnis kantor',
+      notes: appNotes,
+      createdAt: timestamp,
+      status: 'Menunggu Review'
+    };
+
+    setApplications(prev => [newApp, ...prev]);
+    setSelectedApplication(newApp);
+
+    // Reset form
+    setAppPropertyName('');
+    setAppPrice('');
+    setAppPurpose('');
+    setAppNotes('');
+
+    logActivity(`Membuat Surat Pengajuan Sewa ${applicationNumber} dari pelanggan ${selectedAppCustomer.name}`, 'Kontrak Sewa');
+    addNotification('Surat Pengajuan Sewa Diunggah', `Dokumen pengajuan sewa ${applicationNumber} berhasil tersimpan ke sistem.`, 'success');
+  };
+
+  const handleUpdateApplicationStatus = (id: string, status: 'Menunggu Review' | 'Diterima' | 'Ditolak') => {
+    setApplications(prev => prev.map(app => {
+      if (app.id === id) {
+        return { ...app, status };
+      }
+      return app;
+    }));
+    
+    // update current selected application representation
+    setSelectedApplication(prev => prev && prev.id === id ? { ...prev, status } : prev);
+
+    const actionText = status === 'Diterima' 
+      ? 'Menyetujui & memberikan E-Stamp' 
+      : status === 'Ditolak'
+      ? 'Menolak'
+      : 'Mengembalikan status review ke antrean';
+      
+    logActivity(`${actionText} Surat Pengajuan Sewa berkas ID ${id}`, 'Kontrak Sewa');
+    addNotification(
+      `Status Pengajuan Diperbarui`,
+      `Dokumen pengajuan sewa pelanggan dengan ID ${id} kini berstatus ${status}.`,
+      status === 'Diterima' ? 'success' : status === 'Ditolak' ? 'danger' : 'info'
+    );
+  };
+
+  const handleDeleteApplication = (id: string) => {
+    if (window.confirm('Apakah Anda yakin ingin menghapus surat pengajuan sewa ini secara permanen?')) {
+      setApplications(prev => prev.filter(app => app.id !== id));
+      setSelectedApplication(null);
+      logActivity(`Menghapus Surat Pengajuan Sewa berkas ID ${id}`, 'Kontrak Sewa');
     }
   };
 
@@ -389,7 +561,7 @@ export const RentContractView: React.FC = () => {
 
         <div className="flex items-center space-x-2 bg-slate-100 p-0.5 rounded-xl border border-slate-200 self-start md:self-auto">
           <button
-            onClick={() => { setActiveTab('list'); setSelectedContract(null); }}
+            onClick={() => { setActiveTab('list'); setSelectedContract(null); setSelectedApplication(null); }}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
               activeTab === 'list' && !selectedContract
                 ? 'bg-white text-slate-800 shadow'
@@ -399,7 +571,7 @@ export const RentContractView: React.FC = () => {
             Daftar Kontrak ({contracts.length})
           </button>
           <button
-            onClick={() => { setActiveTab('create'); setSelectedContract(null); }}
+            onClick={() => { setActiveTab('create'); setSelectedContract(null); setSelectedApplication(null); }}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
               activeTab === 'create'
                 ? 'bg-white text-slate-800 shadow'
@@ -407,6 +579,19 @@ export const RentContractView: React.FC = () => {
             }`}
           >
             Buat Kontrak Baru
+          </button>
+          <button
+            onClick={() => { setActiveTab('applications'); setSelectedContract(null); setSelectedApplication(null); }}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'applications'
+                ? 'bg-white text-slate-800 shadow'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Surat Pengajuan Sewa ({applications.length})
+            {applications.filter(a => a.status === 'Menunggu Review').length > 0 && (
+              <span className="w-2 h-2 rounded-full bg-red-650 animate-pulse inline-block" />
+            )}
           </button>
         </div>
       </div>
@@ -911,6 +1096,440 @@ export const RentContractView: React.FC = () => {
             </button>
           </div>
         </form>
+      )}
+
+      {/* TAMPILAN VIEW PENGAJUAN SEWA PELANGGAN */}
+      {activeTab === 'applications' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in text-slate-800" id="rental-applications-viewport">
+          
+          {/* Applications Sidebar List */}
+          <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-150 p-4 shadow-sm h-[calc(100vh-220px)] flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-[10px] text-slate-400 uppercase tracking-wider">Berkas Pengajuan ({applications.length})</h3>
+              <button
+                onClick={() => {
+                  setSelectedApplication(null);
+                  setIsCreatingApp(true);
+                }}
+                className="px-2.5 py-1 bg-red-650 hover:bg-red-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                id="write-new-app-btn"
+              >
+                <Plus size={12} />
+                <span>Tulis Pengajuan</span>
+              </button>
+            </div>
+
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-3 text-slate-400" size={13} />
+              <input
+                type="text"
+                placeholder="Cari pengajuan sewa..."
+                value={appSearchQuery}
+                onChange={(e) => setAppSearchQuery(e.target.value)}
+                className="w-full text-xs border border-slate-150 rounded-xl pl-9 pr-4 py-2 outline-none focus:border-red-500 bg-slate-50"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              {applications
+                .filter(app => {
+                  const query = appSearchQuery.toLowerCase();
+                  return (
+                    app.applicationNumber.toLowerCase().includes(query) ||
+                    app.customerName.toLowerCase().includes(query) ||
+                    app.propertyName.toLowerCase().includes(query)
+                  );
+                })
+                .map(app => {
+                  const isSelected = selectedApplication?.id === app.id;
+                  return (
+                    <div
+                      key={app.id}
+                      onClick={() => {
+                        setSelectedApplication(app);
+                        setIsCreatingApp(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-red-400 bg-red-50/20 shadow-sm'
+                          : 'border-slate-100 bg-slate-50/50 hover:bg-slate-100/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-[9px] font-bold text-[#D32F2F]">
+                          {app.applicationNumber}
+                        </span>
+                        <span className={`px-2 py-0.5 text-[8px] font-black rounded-md ${
+                          app.status === 'Diterima'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : app.status === 'Ditolak'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {app.status.toUpperCase()}
+                        </span>
+                      </div>
+
+                      <h4 className="font-bold text-slate-800 text-xs mt-1.5 truncate">
+                        {app.customerName}
+                      </h4>
+                      <p className="text-[10px] text-slate-500 font-semibold truncate mt-0.5">
+                        <span className="text-[#D32F2F] font-bold">Objek:</span> {app.propertyName}
+                      </p>
+
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[9px] text-slate-400 font-semibold">
+                        <span>{app.createdAt}</span>
+                        <span className="text-slate-600 font-bold">Rp {app.proposedPrice.toLocaleString('id-ID')}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              
+              {applications.length === 0 && (
+                <div className="text-center py-10 text-slate-450 text-xs bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  Belum ada dokumen surat pengajuan sewa.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Detailed Document View or Create Form */}
+          <div className="lg:col-span-8 flex flex-col h-[calc(100vh-220px)]">
+            {isCreatingApp ? (
+              <form onSubmit={handleCreateApplication} className="bg-white rounded-2xl border border-slate-150 p-6 shadow-sm space-y-5 flex-1 overflow-y-auto">
+                <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-black text-slate-800 text-sm">Form Surat Pengajuan Minat Sewa Pelanggan</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Surat resmi berisi permohonan sewa perangkat, alat, atau properti operasional ditujukan ke Direksi PT. FGI.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingApp(false)}
+                    className="p-1.5 px-3.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 text-xs font-bold border border-slate-200 cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
+                  <div className="col-span-1 md:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Pilih Pelanggan Yang Mengajukan</label>
+                    <select
+                      value={selectedAppCustomer ? selectedAppCustomer.id : ''}
+                      onChange={(e) => {
+                        const target = customers.find(c => c.id === e.target.value);
+                        if (target) setSelectedAppCustomer(target);
+                      }}
+                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white cursor-pointer shadow-inner"
+                    >
+                      <option value="">-- Pilih Pelanggan --</option>
+                      {customers.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.company || 'Pribadi'})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Objek / Barang yang Ingin Disewa</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Server Rackmount Xeon / Mesin Pabrik"
+                      value={appPropertyName}
+                      onChange={(e) => setAppPropertyName(e.target.value)}
+                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Durasi Waktu Sewa</label>
+                    <select
+                      value={appDuration}
+                      onChange={(e) => setAppDuration(e.target.value)}
+                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white cursor-pointer"
+                    >
+                      <option value="1 Bulan">1 Bulan</option>
+                      <option value="3 Bulan">3 Bulan</option>
+                      <option value="6 Bulan">6 Bulan</option>
+                      <option value="12 Bulan">12 Bulan (1 Tahun)</option>
+                      <option value="24 Bulan">24 Bulan (2 Tahun)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Rencana Nominal Anggaran Sewa (Rp)</label>
+                    <input
+                      type="number"
+                      placeholder="Contoh: 12000000"
+                      value={appPrice}
+                      onChange={(e) => setAppPrice(e.target.value)}
+                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Tujuan Penggunaan Barang</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Kebutuhan core database ERP prod"
+                      value={appPurpose}
+                      onChange={(e) => setAppPurpose(e.target.value)}
+                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white"
+                    />
+                  </div>
+
+                  <div className="col-span-1 md:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Rincian / Keterangan Kebutuhan Khusus</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Sebutkan catatan instalasi OS, bandwidth khusus, perawatan rutin, atau detail lainnya..."
+                      value={appNotes}
+                      onChange={(e) => setAppNotes(e.target.value)}
+                      className="w-full border border-slate-200 p-3 text-xs font-semibold rounded-xl focus:border-[#D32F2F] outline-none bg-white text-slate-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-[#D32F2F] hover:bg-red-700 text-white rounded-xl text-xs font-extrabold shadow-md shadow-red-900/10 transition flex items-center gap-2 cursor-pointer"
+                  >
+                    <Send size={13} />
+                    <span>Kirim Surat Pengajuan Resmi</span>
+                  </button>
+                </div>
+              </form>
+            ) : selectedApplication ? (
+              <div className="space-y-4 flex flex-col justify-between h-full bg-slate-50 overflow-y-auto">
+                
+                {/* Application Letter Layout (Paper Mock) */}
+                <div className="bg-white border border-slate-200 shadow-md rounded-2xl p-6 md:p-8 relative font-serif text-slate-800 leading-relaxed overflow-hidden text-left mx-1">
+                  
+                  {/* Decorative background stamp depending on state */}
+                  {selectedApplication.status === 'Diterima' && (
+                    <div className="absolute top-10 right-10 border-4 border-emerald-505 bg-emerald-50/50 px-5 py-2 uppercase font-mono font-black tracking-widest text-emerald-700 rounded-xl text-center select-none scale-90 rotate-6 shadow z-10">
+                      APPROVED / DITERIMA
+                      <span className="block text-[6px] tracking-normal font-sans font-bold text-slate-500">PT. FORESYNDO GLOBAL INDONESIA</span>
+                    </div>
+                  )}
+
+                  {selectedApplication.status === 'Ditolak' && (
+                    <div className="absolute top-10 right-10 border-4 border-rose-500 bg-rose-50/50 px-5 py-2 uppercase font-mono font-black tracking-widest text-[#E11D48] rounded-xl text-center select-none scale-90 -rotate-3 shadow z-10">
+                      REJECTED / DITOLAK
+                      <span className="block text-[6px] tracking-normal font-sans font-bold text-slate-500">PT. FORESYNDO GLOBAL INDONESIA</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between border-b pb-4 mb-4">
+                    <div>
+                      <h4 className="text-xs font-extrabold uppercase font-sans tracking-tight text-slate-900">PT. FORESYNDO GLOBAL INDONESIA</h4>
+                      <p className="text-[9px] text-slate-400 font-bold font-sans">E-COMMERCE BILLING GATEWAY SYSTEM</p>
+                    </div>
+                    <span className="font-mono text-[9px] text-slate-400 font-bold uppercase">SECURE REQUEST ID: {selectedApplication.id.slice(-8).toUpperCase()}</span>
+                  </div>
+
+                  <div className="text-center mb-6">
+                    <h3 className="text-sm font-black underline font-sans text-slate-900 tracking-wide uppercase">SURAT PENGAJUAN MINAT SEWA DAN PROPOSAL BARANG</h3>
+                    <p className="text-[10px] font-mono font-semibold text-slate-500 mt-1">Nomor Registrasi: {selectedApplication.applicationNumber}</p>
+                  </div>
+
+                  <div className="space-y-4 text-xs font-sans mt-6">
+                    <div className="text-right text-[11px] text-slate-550">
+                      Jakarta, {selectedApplication.createdAt}
+                    </div>
+
+                    <div className="text-[11px] font-bold leading-normal">
+                      <p className="text-slate-400 font-semibold uppercase">Tersurat Kepada Yth.</p>
+                      <p className="text-xs text-slate-900 font-extrabold">Direktur Utama PT. Foresyndo Global Indonesia</p>
+                      <p className="text-slate-500">Komp. Office Hub Blok G-5, DKI Jakarta</p>
+                      <p className="mt-3 text-red-650 italic font-bold">Hal: Surat Pernyataan Minat Sewa Alat & Kelayakan Operasional</p>
+                    </div>
+
+                    <p className="text-[11px] text-justify leading-relaxed text-slate-700 select-none">
+                      Dengan hormat, selaku perwakilan dari Pihak Calon Penyewa (Klien / Mitra Korporasi), kami mengajukan surat pernyataan minat sewa secara resmi atas salah satu jajaran inventaris alat, mesin, or properti yang dikelola oleh PT Foresyndo Global Indonesia. Struktur proposal ini kami layangkan dengan rincian data sebagai berikut:
+                    </p>
+
+                    {/* Specification Paper Information Container */}
+                    <div className="bg-slate-50/50 p-4 border border-slate-150 rounded-xl space-y-2 mt-4">
+                      <h4 className="font-black text-[#D32F2F] text-[9px] uppercase tracking-wider">A. INFORMASI MITRA PENGANJUR (PIHAK KEDUA)</h4>
+                      
+                      <div className="grid grid-cols-3 gap-y-1 my-2">
+                        <span className="text-slate-400 font-bold col-span-1">Nama Pengaju</span>
+                        <span className="col-span-2 font-bold text-slate-800">: {selectedApplication.customerName}</span>
+                        
+                        <span className="text-slate-400 font-bold col-span-1">Perusahaan</span>
+                        <span className="col-span-2 font-bold text-slate-800">: {selectedApplication.customerCompany || 'Pribadi / Perorangan'}</span>
+                        
+                        <span className="text-slate-400 font-bold col-span-1">Kontak Info</span>
+                        <span className="col-span-2 font-bold text-slate-800">: {selectedApplication.customerPhone} / {selectedApplication.customerEmail}</span>
+                      </div>
+
+                      <div className="border-t border-dashed border-slate-200 my-2 pt-2"></div>
+                      <h4 className="font-black text-[#D32F2F] text-[9px] uppercase tracking-wider">B. RINCIAN STRUKTUR BARANG & OPERASIONAL SEWA</h4>
+
+                      <div className="grid grid-cols-3 gap-y-1 my-2">
+                        <span className="text-slate-400 font-bold col-span-1">Objek / Barang</span>
+                        <span className="col-span-2 font-black text-slate-900">: {selectedApplication.propertyName}</span>
+                        
+                        <span className="text-slate-400 font-bold col-span-1">Durasi Rencana</span>
+                        <span className="col-span-2 font-bold text-slate-800">: {selectedApplication.proposalDuration}</span>
+                        
+                        <span className="text-slate-400 font-bold col-span-1">Anggaran Diajukan</span>
+                        <span className="col-span-2 font-black text-emerald-800">: Rp {selectedApplication.proposedPrice.toLocaleString('id-ID')}</span>
+                        
+                        <span className="text-slate-400 font-bold col-span-1">Tujuan Operasional</span>
+                        <span className="col-span-2 font-bold text-slate-800">: {selectedApplication.purpose}</span>
+                      </div>
+                    </div>
+
+                    {selectedApplication.notes && (
+                      <div className="p-3.5 bg-red-50/20 border-l-2 border-[#D32F2F] rounded-r-xl font-sans text-xs text-slate-650">
+                        <span className="font-bold text-slate-700 block text-[9px] uppercase tracking-wider mb-0.5">Catatan Khusus Pengaju:</span>
+                        <span className="italic">"{selectedApplication.notes}"</span>
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-justify leading-relaxed text-slate-600 my-4">
+                      Demikian surat pernyataan minat sewa operasional resmi ini kami sampaikan dengan harapan agar Direksi PT. Foresyndo Global Indonesia dapat menyetujui anggaran sewa tersebut dan melanjutkan ke tahap penerbitan Surat Kontrak Perjanjian Sewa secara resmi. Atas perhatian, kesediaan, dan kerja sama luar biasa dari Direksi PT. FGI, kami ucapkan banyak terima kasih.
+                    </p>
+
+                    {/* Signature Field Container of HTML */}
+                    <div className="flex items-end justify-between mt-10 pt-6 border-t border-dashed border-slate-200">
+                      <div>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">Pihak Pengaju (Penyewa),</p>
+                        <div className="h-16 flex flex-col justify-center my-1.5">
+                          <span className="font-mono text-[7px] border border-slate-200 text-slate-450 px-2 py-1 select-none text-center rounded bg-slate-50 font-bold uppercase tracking-wider">
+                            E-SUBMITTED SYSTEM OK
+                          </span>
+                        </div>
+                        <p className="font-bold text-xs text-slate-700">{selectedApplication.customerName}</p>
+                        <p className="text-[8px] text-slate-400 font-semibold">{selectedApplication.customerCompany || 'Penyewa Perorangan'}</p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-[9px] text-slate-400 font-bold uppercase">PT. Foresyndo Global Indonesia,</p>
+                        <div className="h-16 flex items-center justify-end gap-3 my-1.5">
+                          {selectedApplication.status === 'Diterima' ? (
+                            <>
+                              <div className="border border-emerald-200 bg-emerald-50/40 p-1 rounded-lg text-center flex flex-col items-center">
+                                <span className="text-[5px] tracking-wider font-mono text-emerald-800 uppercase font-black">
+                                  FGI RECEIVED
+                                </span>
+                                <div className="h-0.5 bg-emerald-500 w-10 my-0.5 rounded-full animate-pulse" />
+                                <span className="text-[5px] block font-mono text-slate-500 scale-90">
+                                  AUTO E-SIGN
+                                </span>
+                              </div>
+                              
+                              <div className="border border-emerald-200 bg-white p-1 rounded-lg shadow-sm" title="Automatic FGI Stamp Verified">
+                                <img
+                                  src={generateSecureQrStamp(
+                                    selectedApplication.applicationNumber,
+                                    'PT. Foresyndo Global Indonesia',
+                                    'System Auto Receipt stamp',
+                                    selectedApplication.createdAt
+                                  )}
+                                  alt="FGI Automatic QR Barcode"
+                                  className="w-10 h-10 border-0"
+                                />
+                                <span className="text-[5px] block font-mono text-center text-emerald-600 scale-90 mt-0.5 font-bold">
+                                  E-VERIFIED
+                                </span>
+                              </div>
+                            </>
+                          ) : selectedApplication.status === 'Ditolak' ? (
+                            <div className="border border-rose-200 bg-rose-50/50 px-2.5 py-1.5 rounded-lg">
+                              <span className="text-[9px] text-rose-800 font-extrabold uppercase block tracking-wider">REJECTED</span>
+                              <span className="text-[6px] text-slate-400 block mt-0.5">Dibatalkan Direksi</span>
+                            </div>
+                          ) : (
+                            <div className="border border-dashed border-amber-200 bg-amber-50/50 px-2 py-1 rounded text-center rotate-1">
+                              <span className="text-[8px] text-amber-800 font-black uppercase inline-block">PENDING REVIEW</span>
+                              <span className="text-[6px] text-slate-500 block">Menunggu Stempel</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="font-bold text-xs text-slate-700">Direktur Utama PT. Foresyndo</p>
+                        <p className="text-[8px] text-slate-400">PT. Foresyndo Global Indonesia</p>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Bottom Review Actions & PDF Downloader */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-4 text-left mx-1 mb-1">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-black text-slate-700 uppercase">Review:</span>
+                    
+                    {selectedApplication.status === 'Menunggu Review' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleUpdateApplicationStatus(selectedApplication.id, 'Diterima')}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                        >
+                          <CheckCircle size={13} />
+                          <span>Setujui (Stempel Barcode)</span>
+                        </button>
+                        <button
+                          onClick={() => handleUpdateApplicationStatus(selectedApplication.id, 'Ditolak')}
+                          className="px-4 py-2 bg-red-50 hover:bg-rose-100 text-[#D32F2F] font-bold rounded-xl text-xs transition flex items-center gap-1 cursor-pointer border border-red-200"
+                        >
+                          <span>Tolak Pengajuan</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {selectedApplication.status !== 'Menunggu Review' && (
+                      <button
+                        onClick={() => handleUpdateApplicationStatus(selectedApplication.id, 'Menunggu Review')}
+                        className="py-1.5 px-3 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-650 text-xs font-bold border border-slate-200 transition cursor-pointer"
+                      >
+                        Reset Status ke Review
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end md:self-auto">
+                    <button
+                      onClick={() => generateRentalApplicationPDF(selectedApplication, settings)}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow cursor-pointer"
+                      title="Download Certified PDF document"
+                    >
+                      <Download size={13} />
+                      <span>Unduh PDF (Otomatis Barcode)</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleDeleteApplication(selectedApplication.id);
+                      }}
+                      className="p-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-650 rounded-xl transition cursor-pointer"
+                      title="Hapus Pengajuan"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-150 p-12 text-center text-slate-500 shadow-sm flex flex-col justify-center items-center h-full">
+                <FileText className="text-slate-350 animate-bounce mb-3" size={40} />
+                <h3 className="font-bold text-slate-800 text-sm">Pilih Dokumen Pengajuan Sewa</h3>
+                <p className="text-xs text-slate-400 font-semibold mt-1 max-w-sm">
+                  Gunakan panel di sebelah kiri untuk menelusuri draf pengajuan, menyetujui, or ketuk tombol "Tulis Pengajuan" untuk meluncurkan minat sewa baru.
+                </p>
+                <button
+                  onClick={() => setIsCreatingApp(true)}
+                  className="mt-4 px-4 py-2 bg-[#D32F2F]/5 hover:bg-[#D32F2F]/10 text-[#D32F2F] border border-[#D32F2F]/10 rounded-xl text-xs font-black transition"
+                >
+                  Tulis Pengajuan Sewa Baru
+                </button>
+              </div>
+            )}
+          </div>
+
+        </div>
       )}
 
       {/* Touch Signature Pad Canvas Modal */}

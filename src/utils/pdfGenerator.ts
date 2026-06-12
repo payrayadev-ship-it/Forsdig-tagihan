@@ -1274,3 +1274,215 @@ export const angkaKeKata = (nominal: number): string => {
   }
   return temp.trim().replace(/\s+/g, ' ');
 };
+
+/**
+ * Generates and downloads a beautifully formatted, official Customer Rental Application Letter
+ * addressed to PT. Foresyndo Global Indonesia, with automatic verification barcode stamps.
+ */
+export const generateRentalApplicationPDF = (
+  app: {
+    id: string;
+    applicationId: string;
+    applicationNumber: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    customerCompany?: string;
+    propertyName: string;
+    proposalDuration: string;
+    proposedPrice: number;
+    purpose: string;
+    notes?: string;
+    createdAt: string;
+    status: 'Menunggu Review' | 'Diterima' | 'Ditolak';
+  },
+  settings: SystemSetting | null
+) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 20;
+  const contentWidth = pageWidth - (marginX * 2);
+
+  const textDark: [number, number, number] = [30, 41, 59]; // Slate 800
+  const textMuted: [number, number, number] = [100, 116, 139]; // Slate 500
+  const primaryCrimson: [number, number, number] = [190, 24, 74];
+
+  // 1. Decorative top band
+  doc.setFillColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.rect(0, 0, pageWidth, 4.5, 'F');
+
+  let currentY = 18;
+
+  // Header Letterhead of Sender
+  doc.setFont('times', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('SURAT PENGAJUAN MINAT SEWA BARANG & PROPERTI', marginX, currentY);
+  currentY += 5;
+
+  doc.setFont('times', 'normal');
+  doc.setFontSize(9.5);
+  doc.text(`Nomor Dokumen: ${app.applicationNumber}`, marginX, currentY);
+  doc.text(`Tanggal Pengajuan: ${app.createdAt}`, pageWidth - marginX - 60, currentY);
+  
+  currentY += 8;
+  // Border line
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.4);
+  doc.line(marginX, currentY, pageWidth - marginX, currentY);
+
+  currentY += 8;
+
+  // Target and Recipient block
+  doc.setFont('times', 'bold');
+  doc.setFontSize(10.5);
+  doc.text('Tersurat Kepada Yth.', marginX, currentY);
+  currentY += 5;
+  doc.text('Direktur Utama PT. Foresyndo Global Indonesia', marginX, currentY);
+  currentY += 4.5;
+  doc.setFont('times', 'normal');
+  doc.text('Komp. Office Hub Blok G-5, DKI Jakarta', marginX, currentY);
+  currentY += 4.5;
+  doc.text('Perihal: Surat Pengajuan Minat Sewa Properti & Fasilitas', marginX, currentY);
+
+  currentY += 10;
+
+  // Opening paragraph
+  doc.setFont('times', 'normal');
+  doc.setFontSize(10);
+  doc.text('Dengan hormat,', marginX, currentY);
+  currentY += 6;
+
+  const openingTxt = `Saya yang bertanda tangan di bawah ini, selaku perwakilan dari Pihak Pengaju (Calon Penyewa), mengajukan permohonan minat sewa secara resmi atas barang, peralatan, atau properti operasional yang dikelola oleh pihak PT. Foresyndo Global Indonesia. Rincian pengajuan sewa kami cantumkan sebagai berikut:`;
+  const splitOpening = doc.splitTextToSize(openingTxt, contentWidth);
+  doc.text(splitOpening, marginX, currentY);
+  currentY += splitOpening.length * 4.5 + 4;
+
+  // Specification Table layout
+  doc.setFillColor(248, 250, 252); // Slate 50 background
+  doc.rect(marginX, currentY, contentWidth, 54, 'F');
+  doc.setDrawColor(226, 232, 240); // Slate 200 border
+  doc.rect(marginX, currentY, contentWidth, 54, 'S');
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('I. INFORMASI IDENTITAS CALON PENYEWA (PIHAK PENGAJU)', marginX + 4, currentY + 5);
+  doc.setFont('times', 'normal');
+  doc.text(`   Nama Lengkap        : ${app.customerName}`, marginX + 6, currentY + 11);
+  doc.text(`   Perusahaan/Instansi : ${app.customerCompany || 'Pribadi / Perorangan'}`, marginX + 6, currentY + 15.5);
+  doc.text(`   Kontak / Email      : ${app.customerPhone} / ${app.customerEmail}`, marginX + 6, currentY + 20);
+
+  doc.setFont('times', 'bold');
+  doc.text('II. RINCIAN STRUKTUR BARANG & PROPOSAL SEWA', marginX + 4, currentY + 28);
+  doc.setFont('times', 'normal');
+  doc.text(`   Nama Objek/Barang   : ${app.propertyName}`, marginX + 6, currentY + 34);
+  doc.text(`   Durasi yang Diajukan : ${app.proposalDuration}`, marginX + 6, currentY + 38.5);
+  doc.text(`   Rencana Harga Sewa   : Rp ${(app.proposedPrice || 0).toLocaleString('id-ID')}`, marginX + 6, currentY + 43);
+  doc.text(`   Tujuan Keperluan    : ${app.purpose}`, marginX + 6, currentY + 47.5);
+
+  currentY += 60;
+
+  // Remarks / Notes
+  if (app.notes) {
+    doc.setFont('times', 'bold');
+    doc.text('Keterangan Tambahan / Informasi Khusus:', marginX, currentY);
+    currentY += 4.5;
+    doc.setFont('times', 'italic');
+    const splitNotes = doc.splitTextToSize(app.notes, contentWidth);
+    doc.text(splitNotes, marginX, currentY);
+    currentY += splitNotes.length * 4.5 + 6;
+  }
+
+  // Closing Paragraph
+  doc.setFont('times', 'normal');
+  doc.setFontSize(9.5);
+  const closingTxt = `Demikian surat minat dan pengajuan sewa ini kami sampaikan dengan harapan dapat berlanjut ke tahap pembuatan draf Surat Perjanjian Kontrak Sewa resmi. Atas perhatian, kesediaan, dan kerja sama Bapak/Ibu Direktur PT. Foresyndo Global Indonesia, kami ucapkan terima kasih.`;
+  const splitClosing = doc.splitTextToSize(closingTxt, contentWidth);
+  doc.text(splitClosing, marginX, currentY);
+  currentY += splitClosing.length * 4.5 + 12;
+
+  // Signatures
+  const sigY = currentY;
+
+  // Left side signature (Customer)
+  doc.setFont('times', 'bold');
+  doc.text('Hormat Kami (Pengaju/Penyewa),', marginX, sigY);
+  
+  // Custom subtle grey digital verification watermark for customer side
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(241, 245, 249);
+  doc.rect(marginX, sigY + 2, 45, 12, 'FD');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('E-SUBMITTED BY CUSTOMER', marginX + 3, sigY + 7);
+  doc.text(`DATE: ${app.createdAt}`, marginX + 3, sigY + 11);
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(app.customerName.toUpperCase(), marginX, sigY + 24);
+  doc.setFont('times', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text(app.customerCompany || 'Penyewa Mandiri', marginX, sigY + 28);
+
+  // Right side signature (FGI Receipt / Verification stamp automatically!)
+  doc.setFont('times', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  const rightX = pageWidth - marginX - 55;
+  doc.text('Diterima & Disahkan Oleh:', rightX, sigY);
+
+  // Automatic stamp generator call with barcode and QR
+  try {
+    const fgiBarcode = generateFirstPartyLinearBarcode(app.applicationNumber);
+    const fgiQr = generateFirstPartyQrBadge(app.applicationNumber, app.createdAt);
+
+    if (fgiBarcode) {
+      doc.addImage(fgiBarcode, 'PNG', rightX - 4, sigY + 2, 36, 9);
+    }
+    if (fgiQr) {
+      doc.addImage(fgiQr, 'PNG', rightX + 34, sigY + 1, 14, 14);
+    }
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(5.8);
+    doc.setTextColor(5, 150, 105); // Emerald green for valid stamps
+    doc.text(`RECEIPT STATE: ${app.status.toUpperCase()}`, rightX - 4, sigY + 15);
+    doc.text(`E-VERIFIED SECURE BARCODE`, rightX - 4, sigY + 18);
+  } catch (err) {
+    console.error('Error drawing FGI signature badges on Application:', err);
+    doc.setFillColor(240, 253, 244);
+    doc.setDrawColor(187, 247, 208);
+    doc.rect(rightX - 4, sigY + 4, 55, 12, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(21, 128, 61);
+    doc.text('FGI SYSTEM E-RECEIVED', rightX - 1, sigY + 8);
+  }
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('DIREKTUR UTAMA PT. FGI', rightX - 4, sigY + 24);
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('PT. Foresyndo Global Indonesia', rightX - 4, sigY + 28);
+
+  // Footer footer info
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Surat Pengajuan Minat Sewa Digital Resmi | PT. Foresyndo Global Indonesia | Sistem Otomasi Barcode & QR', pageWidth / 2, pageHeight - 8, { align: 'center' });
+
+  doc.save(`SURAT_PENGAJUAN_${app.applicationNumber}_${app.customerName.replace(/[^a-zA-Z]/g, '_')}.pdf`);
+};
