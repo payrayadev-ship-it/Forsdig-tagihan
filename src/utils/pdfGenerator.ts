@@ -3,6 +3,118 @@ import autoTable from 'jspdf-autotable';
 import { Invoice, Customer, CashAccount, SystemSetting, RentContract } from '../types';
 
 /**
+ * Procedurally generates a professional 1D linear barcode representing PT. Foresyndo Global Indonesia
+ */
+const generateFirstPartyLinearBarcode = (contractNumber: string): string => {
+  if (typeof document === 'undefined') return '';
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 40;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, 160, 40);
+
+    // Draw random but consistent vertical barcode lines
+    ctx.fillStyle = '#1E293B'; // Slate 800
+    let currentX = 10;
+    const hashSeed = (contractNumber || 'CNT').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    let i = 0;
+    while (currentX < 150) {
+      const lineSin = Math.sin(i * 0.7 + hashSeed);
+      const width = lineSin > 0.5 ? 2.5 : (lineSin > 0 ? 1.5 : 0.8);
+      const gap = Math.abs(Math.sin(i * 1.34 + hashSeed)) * 2.5 + 1;
+      ctx.fillRect(currentX, 4, width, 24);
+      currentX += width + gap;
+      i++;
+    }
+
+    // Label
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 6.5px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`*FGI-${(contractNumber || 'F').toUpperCase()}*`, 80, 35);
+
+    return canvas.toDataURL('image/png');
+  } catch (e) {
+    console.error('Failed to generate automatic linear barcode:', e);
+    return '';
+  }
+};
+
+/**
+ * Procedurally generates a professional stamp QR verification representing PT. Foresyndo Global Indonesia
+ */
+const generateFirstPartyQrBadge = (contractNumber: string, dateStr: string): string => {
+  if (typeof document === 'undefined') return '';
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 120;
+    canvas.height = 120;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, 120, 120);
+
+    ctx.strokeStyle = '#059669'; // Emerald 600
+    ctx.lineWidth = 3;
+    ctx.strokeRect(3, 3, 114, 114);
+
+    const drawSquare = (x: number, y: number) => {
+      ctx.fillStyle = '#059669';
+      ctx.fillRect(x, y, 22, 22);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(x + 3, y + 3, 16, 16);
+      ctx.fillStyle = '#059669';
+      ctx.fillRect(x + 5, y + 5, 12, 12);
+    };
+    drawSquare(8, 8);
+    drawSquare(90, 8);
+    drawSquare(8, 90);
+
+    ctx.fillStyle = '#047857';
+    const hash = (contractNumber || 'C').split('').reduce((acc, char) => acc + char.charCodeAt(0), 10);
+    for (let x = 8; x < 112; x += 4) {
+      for (let y = 8; y < 112; y += 4) {
+        if ((x < 32 && y < 32) || (x > 88 && y < 32) || (x < 32 && y > 88)) continue;
+        const coef = Math.sin(x * 12.9 + y * 78.2 + hash) * 43758.5;
+        if ((coef % 1) > 0.49) {
+          ctx.fillRect(x, y, 4, 4);
+        }
+      }
+    }
+
+    // Badge center label
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(32, 32, 56, 56);
+    ctx.strokeStyle = '#D32F2F'; // Red 700
+    ctx.lineWidth = 1;
+    ctx.strokeRect(34, 34, 52, 52);
+
+    ctx.fillStyle = '#D32F2F';
+    ctx.font = 'bold 5.5px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('PT. FGI', 60, 48);
+    ctx.fillStyle = '#059669';
+    ctx.font = 'bold 4.5px monospace';
+    ctx.fillText('E-VERIFIED', 60, 58);
+    ctx.fillText('PASAL 5 ITE', 60, 68);
+    ctx.fillStyle = '#64748B';
+    ctx.font = '4px monospace';
+    ctx.fillText(contractNumber ? contractNumber.slice(-6) : 'FGI', 60, 77);
+
+    return canvas.toDataURL('image/png');
+  } catch (e) {
+    console.error('Failed to generate first party QR stamp:', e);
+    return '';
+  }
+};
+
+
+/**
  * Generates and downloads a professional invoice PDF using jsPDF and jspdf-autotable.
  * Styled in high-contrast layout matching Corporate Standard (Slate/Crimson Theme).
  */
@@ -949,18 +1061,20 @@ export const generateContractPDF = (
   doc.text('I. PIHAK PERTAMA (Pemilik / Pemberi Sewa):', marginX, currentY);
   currentY += 5;
   doc.setFont('times', 'normal');
-  doc.text(`   Nama Perusahaan   : ${settings?.companyName || 'FORSDIG Billing ERP System'}`, marginX, currentY);
+  doc.text(`   Nama Perusahaan   : PT. Foresyndo Global Indonesia`, marginX, currentY);
   currentY += 4.5;
-  doc.text(`   Alamat Kantor     : ${settings?.address || 'Komp. Ruko Digital Multi-Sewa No. 2A, Jakarta'}`, marginX, currentY);
+  doc.text(`   Representasi      : Direktur PT. Foresyndo Global Indonesia`, marginX, currentY);
   currentY += 4.5;
-  doc.text(`   Kontak / Email    : ${settings?.email || 'admin@forsdig.id'} (${settings?.phone || '021-9922881'})`, marginX, currentY);
+  doc.text(`   Alamat Kantor     : ${settings?.address || 'Komp. Office Hub Blok G-5, Jakarta'}`, marginX, currentY);
+  currentY += 4.5;
+  doc.text(`   Kontak / Email    : ${settings?.email || 'admin@foresyndo.id'} (${settings?.phone || '021-9922881'})`, marginX, currentY);
   
   currentY += 8;
   doc.setFont('times', 'bold');
   doc.text('II. PIHAK KEDUA (Penyewa / Pelanggan):', marginX, currentY);
   currentY += 5;
   doc.setFont('times', 'normal');
-  doc.text(`   Nama Penyewa      : ${contract.customerName} (${contract.customerTitle || 'Direktur PT. Foresyndo Global Indonesia'})`, marginX, currentY);
+  doc.text(`   Nama Penyewa      : ${contract.customerName} (${contract.customerTitle || 'Penyewa / Pelanggan'})`, marginX, currentY);
   currentY += 4.5;
   doc.text(`   E-mail Surat      : ${contract.customerEmail}`, marginX, currentY);
   currentY += 4.5;
@@ -1047,20 +1161,42 @@ export const generateContractPDF = (
   doc.setTextColor(textDark[0], textDark[1], textDark[2]);
   doc.text('Pihak Pertama (Pemberi Sewa),', marginX, sigY);
 
-  doc.setFillColor(240, 253, 244);
-  doc.setDrawColor(187, 247, 208);
-  doc.rect(marginX, sigY + 4, 55, 12, 'FD');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6.5);
-  doc.setTextColor(21, 128, 61);
-  doc.text('SYSTEM DIGITAL VERIFIED', marginX + 3, sigY + 8);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`REG-DATE: ${contract.createdAt || 'RECENT'}`, marginX + 3, sigY + 12);
+  try {
+    const fgiBarcode = generateFirstPartyLinearBarcode(contract.contractNumber);
+    const fgiQr = generateFirstPartyQrBadge(contract.contractNumber, contract.createdAt);
+
+    if (fgiBarcode) {
+      doc.addImage(fgiBarcode, 'PNG', marginX, sigY + 2, 36, 9);
+    }
+    if (fgiQr) {
+      doc.addImage(fgiQr, 'PNG', marginX + 38, sigY + 1, 14, 14);
+    }
+
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(5.8);
+    doc.setTextColor(5, 150, 105); // Emerald green
+    doc.text(`AUTOMATIC SECURE SIGNATURE`, marginX, sigY + 15);
+    doc.text(`SYSTEM CO-SIGNED ON CLOUD`, marginX, sigY + 18);
+  } catch (err) {
+    console.error('Error drawing FGI signature badges:', err);
+    doc.setFillColor(240, 253, 244);
+    doc.setDrawColor(187, 247, 208);
+    doc.rect(marginX, sigY + 4, 55, 12, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(21, 128, 61);
+    doc.text('SYSTEM DIGITAL VERIFIED', marginX + 3, sigY + 8);
+  }
 
   doc.setFont('times', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-  doc.text('FORSDIG ERP AUTHORIZED', marginX, sigY + 22);
+  doc.text('DIREKTUR PT. FORESYNDO', marginX, sigY + 24);
+
+  doc.setFont('times', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('PT. Foresyndo Global Indonesia', marginX, sigY + 28);
 
   // Right - Second Party
   const rightX = pageWidth - marginX - 55;
@@ -1102,7 +1238,7 @@ export const generateContractPDF = (
   doc.setFont('times', 'italic');
   doc.setFontSize(8.5);
   doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
-  doc.text(contract.customerTitle || 'Direktur PT. Foresyndo Global Indonesia', rightX - 4, sigY + 28);
+  doc.text(contract.customerTitle || 'Penyewa / Pelanggan', rightX - 4, sigY + 28);
 
   // Page index
   doc.setFont('helvetica', 'normal');

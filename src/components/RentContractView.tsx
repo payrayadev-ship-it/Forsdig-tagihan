@@ -122,7 +122,7 @@ export const RentContractView: React.FC = () => {
   const [endDate, setEndDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [rentalAmount, setRentalAmount] = useState('');
   const [paymentTerm, setPaymentTerm] = useState('Bulanan');
-  const [customerTitle, setCustomerTitle] = useState('Direktur PT. Foresyndo Global Indonesia');
+  const [customerTitle, setCustomerTitle] = useState('Penyewa / Pelanggan');
   const [enableQrSignature, setEnableQrSignature] = useState(true);
   const [termsAndConditions, setTermsAndConditions] = useState(
     '1. Pihak Penyewa berkewajiban menjaga kebersihan dan keutuhan properti/barang selama masa sewa.\n' +
@@ -261,7 +261,7 @@ export const RentContractView: React.FC = () => {
     const signatureQrBase64 = generateSecureQrStamp(
       selectedContract.contractNumber,
       selectedContract.customerName,
-      selectedContract.customerTitle || 'Direktur PT. Foresyndo Global Indonesia',
+      selectedContract.customerTitle || 'Penyewa / Pelanggan',
       new Date().toLocaleString('id-ID')
     );
 
@@ -577,15 +577,15 @@ export const RentContractView: React.FC = () => {
 
                     <div className="pl-4 space-y-1 my-3 font-sans text-xs">
                       <div className="grid grid-cols-3">
-                        <span className="text-slate-500 font-bold">I. NAMA PERUSAHAAN</span>
-                        <span className="col-span-2 font-black">: FORSDIG Billing ERP System</span>
+                        <span className="text-slate-500 font-bold">I. PIHAK PERTAMA</span>
+                        <span className="col-span-2 font-black text-emerald-800">: PT. Foresyndo Global Indonesia (Representasi: Direktur)</span>
                       </div>
                       <div className="grid grid-cols-3">
-                        <span className="text-slate-500 font-bold">II. PELANGGAN / PENYEWA</span>
-                        <span className="col-span-2 font-black">: {selectedContract.customerName} ({selectedContract.customerTitle || 'Direktur PT. Foresyndo Global Indonesia'})</span>
+                        <span className="text-slate-500 font-bold">II. PIHAK KEDUA (PENYEWA)</span>
+                        <span className="col-span-2 font-black">: {selectedContract.customerName} ({selectedContract.customerTitle || 'Penyewa / Pelanggan'})</span>
                       </div>
                       <div className="grid grid-cols-3">
-                        <span className="text-slate-500 font-bold">CONTACT INFO</span>
+                        <span className="text-slate-500 font-bold">KONTAK PIHAK KEDUA</span>
                         <span className="col-span-2 font-semibold">: {selectedContract.customerEmail} / {selectedContract.customerPhone}</span>
                       </div>
                     </div>
@@ -628,13 +628,37 @@ export const RentContractView: React.FC = () => {
                   {/* Signatures Field Container */}
                   <div className="flex items-end justify-between mt-10 pt-6 border-t border-dashed border-slate-200">
                     <div>
-                      <p className="font-sans text-[10px] text-slate-400">Pemberi Sewa,</p>
-                      <div className="h-14 flex items-center">
-                        <div className="border border-emerald-200 bg-emerald-50/50 px-2 py-1 rotate-1 rounded font-sans text-[9px] font-bold text-emerald-800 tracking-wider">
-                          SIGNED ON CLOUD BY FORSDIG SYSTEM
+                      <p className="font-sans text-[10px] text-slate-400">Pemberi Sewa (Pihak Pertama),</p>
+                      <div className="h-20 flex items-center gap-3">
+                        <div className="border border-emerald-200 bg-emerald-50/40 p-1.5 rounded-lg max-w-[120px] shadow-sm relative flex flex-col items-center">
+                          <span className="text-[6px] tracking-wider font-mono text-emerald-800 text-center uppercase font-black">
+                            FGI CO-SIGNED
+                          </span>
+                          <div className="h-1 bg-emerald-500 w-full my-1 rounded-full animate-pulse" />
+                          <span className="text-[5px] block font-mono text-slate-500 text-center scale-90">
+                            E-VERIFIED
+                          </span>
+                        </div>
+                        
+                        {/* Beautifully generated QR e-sign stamp automatically */}
+                        <div className="border border-emerald-200 bg-white p-1 rounded-lg shadow-sm relative" title="Automatic FGI Stamp Verified">
+                          <img
+                            src={generateSecureQrStamp(
+                              selectedContract.contractNumber,
+                              'PT. Foresyndo Global Indonesia',
+                              'Direktur',
+                              selectedContract.createdAt
+                            )}
+                            alt="FGI Automatic QR Barcode"
+                            className="w-11 h-11 border-0"
+                          />
+                          <span className="text-[5px] block font-mono text-center text-emerald-600 scale-90 mt-0.5 font-bold">
+                            QR AUTOMATIC
+                          </span>
                         </div>
                       </div>
-                      <p className="font-sans font-bold text-xs text-slate-700">Direktur Forsdig ERP</p>
+                      <p className="font-sans font-bold text-xs text-slate-700 mt-1">Direktur PT. Foresyndo</p>
+                      <p className="font-sans text-[8px] text-slate-400">PT. Foresyndo Global Indonesia</p>
                     </div>
 
                     <div className="text-right">
@@ -673,7 +697,7 @@ export const RentContractView: React.FC = () => {
                         )}
                       </div>
                       <p className="font-sans font-bold text-xs text-slate-700 mt-1">{selectedContract.customerName}</p>
-                      <p className="font-sans text-[9px] text-slate-500 font-semibold italic">{selectedContract.customerTitle || 'Direktur PT. Foresyndo Global Indonesia'}</p>
+                      <p className="font-sans text-[9px] text-slate-500 font-semibold italic">{selectedContract.customerTitle || 'Penyewa / Pelanggan'}</p>
                       {selectedContract.signedAt && (
                         <p className="font-sans text-[8px] text-slate-400">Ditandatangani pada: {selectedContract.signedAt}</p>
                       )}
@@ -747,7 +771,7 @@ export const RentContractView: React.FC = () => {
                 type="text"
                 value={customerTitle}
                 onChange={(e) => setCustomerTitle(e.target.value)}
-                placeholder="Contoh: Direktur PT. Foresyndo Global Indonesia"
+                placeholder="Contoh: Direktur Utama PT. Maju Bersama, atau Penyewa Utama"
                 className="w-full border border-slate-200 outline-none p-3 text-sm rounded-xl focus:border-red-500 bg-white shadow-inner font-semibold"
                 id="contract-customer-title-input"
               />
