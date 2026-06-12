@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useBilling } from '../context/BillingContext';
 import { Calendar, FileText, Download, Printer, Percent, BarChart3, TrendingUp, DollarSign, ShieldCheck, FileSpreadsheet, Users, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { exportProfitLossToPDF } from '../utils/pdfGenerator';
 
 export const ReportView: React.FC = () => {
-  const { invoices, expenses, payments, cashAccounts, customers } = useBilling();
+  const { invoices, expenses, payments, cashAccounts, customers, settings } = useBilling();
   
   const [activeReportTab, setActiveReportTab] = useState<'rugilaba' | 'penjualan' | 'expenses'>('rugilaba');
   const [startDate, setStartDate] = useState('2026-01-01');
@@ -21,6 +22,19 @@ export const ReportView: React.FC = () => {
   const revenueReceived = filteredPayments.reduce((sum, p) => sum + p.amount, 0);
   const expenseTotal = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
   const netEarnings = revenueTotal - expenseTotal;
+
+  const handleExportPDF = () => {
+    exportProfitLossToPDF(
+      startDate,
+      endDate,
+      revenueTotal,
+      revenueReceived,
+      expenseTotal,
+      netEarnings,
+      categoriesSum(filteredExpenses),
+      settings
+    );
+  };
 
   // Monthly breakdown mock/compiled lists
   const monthlyData = [
@@ -148,6 +162,15 @@ export const ReportView: React.FC = () => {
             />
           </div>
           
+          <button 
+            onClick={handleExportPDF}
+            className="p-1 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md shadow-slate-950/10 transition hover:scale-[1.02] active:scale-[0.98]"
+            id="export-pdf-direct-btn"
+          >
+            <FileText size={13} className="text-red-400" />
+            <span>Ekspor ke PDF</span>
+          </button>
+
           <div className="relative">
             <button 
               onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
@@ -186,6 +209,17 @@ export const ReportView: React.FC = () => {
                   >
                     <FileText size={13} className="text-slate-500" />
                     <span>Format CSV (.CSV)</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      handleExportPDF();
+                      setExportDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center space-x-2 font-bold cursor-pointer text-slate-700 hover:text-red-650 transition border-t border-slate-100/50"
+                    id="export-active-pdf"
+                  >
+                    <FileText size={13} className="text-red-600" />
+                    <span>Format Dokumen PDF (.PDF)</span>
                   </button>
 
                   <div className="my-1.5 border-t border-slate-100" />
@@ -261,7 +295,18 @@ export const ReportView: React.FC = () => {
           <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-150 p-6 flex flex-col justify-between">
             <div className="space-y-4">
               <h3 className="font-bold text-slate-900 text-sm pb-2 border-b border-slate-100 flex items-center justify-between">
-                <span>Rugi-Laba Periodik</span>
+                <span className="flex items-center gap-2">
+                  <span>Rugi-Laba Periodik</span>
+                  <button 
+                    onClick={handleExportPDF}
+                    className="p-1 px-2.5 bg-red-50 hover:bg-red-100 text-[#D32F2F] rounded-lg text-[10px] font-black flex items-center gap-1 cursor-pointer transition border border-red-200/40"
+                    title="Unduh Laporan Laba Rugi PDF"
+                    id="export-pdf-statement-btn"
+                  >
+                    <FileText size={11} />
+                    <span>Ekspor ke PDF</span>
+                  </button>
+                </span>
                 <span className="text-[10px] text-slate-400">IDR - Akrual</span>
               </h3>
 

@@ -115,7 +115,7 @@ app.post('/api/extract-receipt', async (req, res) => {
 // Secure server-side proxy route for sending invoice emails via Resend
 app.post('/api/send-email', async (req, res) => {
   try {
-    const { to, subject, html, companyName, invoiceNumber } = req.body;
+    const { to, subject, html, companyName, invoiceNumber, cc, attachments } = req.body;
     if (!to || !subject || !html) {
       return res.status(400).json({ success: false, error: 'Parameter "to", "subject", dan "html" wajib diisi.' });
     }
@@ -123,18 +123,28 @@ app.post('/api/send-email', async (req, res) => {
     const apiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
     if (apiKey) {
       console.log(`[Email Service] Attempting to send real email to ${to} using Resend API Key...`);
+      const payload: any = {
+        from: `${companyName || 'FORSDIG'} <onboarding@resend.dev>`,
+        to: Array.isArray(to) ? to : [to],
+        subject: subject,
+        html: html,
+      };
+
+      if (cc && cc.length > 0) {
+        payload.cc = cc;
+      }
+
+      if (attachments && attachments.length > 0) {
+        payload.attachments = attachments;
+      }
+
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          from: `${companyName || 'FORSDIG'} <onboarding@resend.dev>`,
-          to: [to],
-          subject: subject,
-          html: html,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {

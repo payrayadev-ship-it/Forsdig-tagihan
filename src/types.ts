@@ -1,4 +1,4 @@
-export type UserRole = 'Super Admin' | 'Admin Keuangan' | 'Staff' | 'Viewer';
+export type UserRole = 'Super Admin' | 'Admin Keuangan' | 'Staff' | 'Viewer' | 'Sales';
 
 export interface UserProfile {
   userId: string;
@@ -82,6 +82,10 @@ export interface Invoice {
   items: InvoiceItem[];
   createdAt: string;
   updatedAt: string;
+  salesId?: string;
+  salesName?: string;
+  commissionRate?: number;
+  commissionAmount?: number;
 }
 
 export type PaymentMethod = 'Transfer Bank' | 'Cash' | 'QRIS' | 'E-Wallet' | 'Virtual Account';
@@ -183,4 +187,27 @@ export interface SystemSetting {
   ppnRate?: number;
   pphEnabled?: boolean;
   pphRate?: number;
+}
+
+export type ContractStatus = 'Draft' | 'Menunggu Tanda Tangan' | 'Aktif' | 'Selesai' | 'Batal';
+
+export interface RentContract {
+  id: string;
+  contractId: string;
+  contractNumber: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  propertyName: string;
+  startDate: string;
+  endDate: string;
+  rentalAmount: number;
+  paymentTerm: string;
+  termsAndConditions: string;
+  signatureDrawBase64?: string;
+  signedAt?: string;
+  status: ContractStatus;
+  createdAt: string;
+  updatedAt: string;
 }

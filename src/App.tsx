@@ -10,8 +10,10 @@ import { ReceivablesView } from './components/ReceivablesView';
 import { ExpenseView } from './components/ExpenseView';
 import { CashControlView } from './components/CashControlView';
 import { ReportView } from './components/ReportView';
+import { SalesCommissionView } from './components/SalesCommissionView';
 import { UserRoleView } from './components/UserRoleView';
 import { SettingView } from './components/SettingView';
+import { RentContractView } from './components/RentContractView';
 import { 
   Bell, Check, Shield, Lock, Mail, UserCheck, ChevronRight, X, AlertCircle, Database, Globe,
   LayoutDashboard, Users, ShoppingBag, Receipt, CreditCard, AlertTriangle, ArrowDownCircle, 
@@ -36,7 +38,7 @@ function AppContent() {
   const [password, setPassword] = useState('');
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [regName, setRegName] = useState('');
-  const [regRole, setRegRole] = useState<'Super Admin' | 'Admin Keuangan' | 'Staff' | 'Viewer'>('Viewer');
+  const [regRole, setRegRole] = useState<'Super Admin' | 'Admin Keuangan' | 'Staff' | 'Viewer' | 'Sales'>('Viewer');
   const [authError, setAuthError] = useState('');
 
   // Notifications dropdown trigger
@@ -110,6 +112,8 @@ function AppContent() {
         return <CashControlView />;
       case 'laporan':
         return <ReportView />;
+      case 'sales':
+        return <SalesCommissionView />;
       case 'notifikasi':
       case 'bell-panel':
         return (
@@ -146,6 +150,8 @@ function AppContent() {
         );
       case 'pengguna':
         return <UserRoleView />;
+      case 'sewa':
+        return <RentContractView />;
       case 'pengaturan':
         return <SettingView />;
       default:
@@ -177,40 +183,6 @@ function AppContent() {
             </div>
 
             <div className="border-t border-slate-800 pt-6">
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide block mb-3">Login Instan Demo (Pilih Peran):</span>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button 
-                  onClick={() => handleQuickSignIn('Super Admin')}
-                  className="flex items-center justify-between p-2.5 bg-red-950/40 hover:bg-red-950/80 hover:text-white text-red-400 rounded-xl border border-red-900/30 font-bold transition text-[11px] cursor-pointer"
-                >
-                  <span>Super Admin</span>
-                  <ChevronRight size={13} />
-                </button>
-                <button 
-                  onClick={() => handleQuickSignIn('Admin Keuangan')}
-                  className="flex items-center justify-between p-2.5 bg-amber-950/40 hover:bg-amber-950/80 hover:text-white text-amber-400 rounded-xl border border-amber-900/30 font-bold transition text-[11px] cursor-pointer"
-                >
-                  <span>CFO Keuangan</span>
-                  <ChevronRight size={13} />
-                </button>
-                <button 
-                  onClick={() => handleQuickSignIn('Staff')}
-                  className="flex items-center justify-between p-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl border border-slate-700/50 font-bold transition text-[11px] cursor-pointer"
-                >
-                  <span>Staff Pelaksana</span>
-                  <ChevronRight size={13} />
-                </button>
-                <button 
-                  onClick={() => handleQuickSignIn('Viewer')}
-                  className="flex items-center justify-between p-2.5 bg-slate-800 hover:bg-slate-750 hover:text-white text-slate-400 rounded-xl border border-slate-700/50 font-bold transition text-[11px] cursor-pointer"
-                >
-                  <span>Viewer / Auditor</span>
-                  <ChevronRight size={13} />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-4 border-t border-slate-850 pt-4">
               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide block mb-2">Integrasi Firebase Cloud:</span>
               <button
                 onClick={async () => {
@@ -221,7 +193,7 @@ function AppContent() {
                     setAuthError(err.message || 'Gagal login real Google SSO.');
                   }
                 }}
-                className="w-full flex items-center justify-between p-2.5 bg-red-650 hover:bg-red-700 text-white rounded-xl border border-red-600/30 font-extrabold transition text-[11px] cursor-pointer shadow-md shadow-red-950/10 animate-pulse-slow"
+                className="w-full flex items-center justify-between p-2.5 bg-red-650 hover:bg-red-700 text-white rounded-xl border border-red-600/30 font-extrabold transition text-[11px] cursor-pointer shadow-md shadow-red-950/10"
                 id="login-google-sso-cta"
               >
                 <span className="flex items-center gap-1.5">
@@ -311,6 +283,7 @@ function AppContent() {
                     <option value="Super Admin">Super Admin</option>
                     <option value="Admin Keuangan">Admin Keuangan</option>
                     <option value="Staff">Staff Pelaksana</option>
+                    <option value="Sales">Tim Sales / Marketing</option>
                     <option value="Viewer">Viewer (Hanya Baca)</option>
                   </select>
                 </div>

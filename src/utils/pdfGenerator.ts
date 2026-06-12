@@ -6,7 +6,11 @@ import { Invoice, Customer, CashAccount, SystemSetting } from '../types';
  * Generates and downloads a professional invoice PDF using jsPDF and jspdf-autotable.
  * Styled in high-contrast layout matching Corporate Standard (Slate/Crimson Theme).
  */
-export const exportInvoiceToPDF = (
+/**
+ * Generates a professional invoice PDF jsPDF instance.
+ * Styled in high-contrast layout matching Corporate Standard (Slate/Crimson Theme).
+ */
+export const generateInvoicePDFDoc = (
   invoice: Invoice,
   customers: Customer[],
   settings: SystemSetting | null,
@@ -447,6 +451,396 @@ export const exportInvoiceToPDF = (
   doc.text('Terima kasih atas kerja sama dan kepercayaan bisnis Anda.', pageWidth / 2, pageHeight - 12, { align: 'center' });
   doc.text('Dokumen ini sah diterbitkan secara digital oleh sistem billing tersertifikasi digital.', pageWidth / 2, pageHeight - 8, { align: 'center' });
 
-  // Save/Download PDF named beautifully
+  return doc;
+};
+
+/**
+ * Generates and downloads a professional invoice PDF file.
+ */
+export const exportInvoiceToPDF = (
+  invoice: Invoice,
+  customers: Customer[],
+  settings: SystemSetting | null,
+  cashAccounts: CashAccount[]
+) => {
+  const doc = generateInvoicePDFDoc(invoice, customers, settings, cashAccounts);
   doc.save(`Invoice-${invoice.invoiceNumber}.pdf`);
+};
+
+/**
+ * Generates and downloads a professional Periodic Income Statement PDF.
+ */
+export const exportProfitLossToPDF = (
+  startDate: string,
+  endDate: string,
+  revenueTotal: number,
+  revenueReceived: number,
+  expenseTotal: number,
+  netEarnings: number,
+  expensesByCategory: Array<{ category: string; amount: number }>,
+  settings: SystemSetting | null
+) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 15;
+  const contentWidth = pageWidth - (marginX * 2); // 180mm
+
+  const primaryCrimson: [number, number, number] = [190, 24, 74]; // Crimson accent (matching Red 650)
+  const textDark: [number, number, number] = [30, 41, 59]; // Slate 800
+  const textMuted: [number, number, number] = [100, 116, 139]; // Slate 500
+  const borderLight: [number, number, number] = [226, 232, 240]; // Slate 200
+  const bgLight: [number, number, number] = [248, 250, 252]; // Slate 50
+
+  // 1. Draw top brand band accent
+  doc.setFillColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.rect(0, 0, pageWidth, 4, 'F');
+
+  // --- HEADER SECTION ---
+  let currentY = 15;
+
+  // Company Name
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(settings?.companyName || 'FORSDIG', marginX, currentY);
+
+  // Document Title on right-side
+  doc.setFontSize(14);
+  doc.setTextColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.text('LAPORAN LABA RUGI', pageWidth - marginX, currentY, { align: 'right' });
+
+  currentY += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text(`E: ${settings?.email || 'admin@forsdig.id'} | T: ${settings?.phone || '-'}`, marginX, currentY);
+  doc.text('Income Statement (Accrual & Realized Basis)', pageWidth - marginX, currentY, { align: 'right' });
+
+  // Divider line
+  currentY += 5;
+  doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+  doc.setLineWidth(0.3);
+  doc.line(marginX, currentY, pageWidth - marginX, currentY);
+
+  // --- REPORT METADATA GRID ---
+  currentY += 7;
+  const metaYStart = currentY;
+
+  // Left side metadata
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.text('PARAMETER LAPORAN', marginX, currentY);
+
+  currentY += 4.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Periode Tanggal:', marginX, currentY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(`${startDate}  s/d  ${endDate}`, marginX + 30, currentY);
+
+  currentY += 4.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Basis Laporan:', marginX, currentY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('Metode Gabungan (Akrual Invoice & Kas Masuk)', marginX + 30, currentY);
+
+  // Right side metadata
+  let rMetaY = metaYStart;
+  const rMetaX = 115;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.text('SISTEM OTENTIKASI', rMetaX, rMetaY);
+
+  rMetaY += 4.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Tanggal Terbit:', rMetaX, rMetaY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(new Date().toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }), pageWidth - marginX, rMetaY, { align: 'right' });
+
+  rMetaY += 4.5;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Status Audit:', rMetaX, rMetaY);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(21, 128, 61); // green
+  doc.text('TERVALIDASI & SIAP AUDIT', pageWidth - marginX, rMetaY, { align: 'right' });
+
+  // Divider above table
+  currentY = Math.max(currentY, rMetaY) + 7;
+  doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+  doc.line(marginX, currentY, pageWidth - marginX, currentY);
+
+  // --- REPORT ENTRIES TABLE ---
+  currentY += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('RINCIAN AKUMULASI KEUANGAN (IDR)', marginX, currentY);
+
+  // Prepare table data
+  const tableColumns = [
+    { header: 'No', dataKey: 'no' },
+    { header: 'Uraian / Parameter Keuangan', dataKey: 'parameter' },
+    { header: 'Kategori Akun', dataKey: 'accType' },
+    { header: 'Rincian Nominal (Rp)', dataKey: 'nominal' }
+  ];
+
+  let itemNo = 1;
+  const tableRows: any[] = [
+    { 
+      no: itemNo++, 
+      parameter: '1. Total Pendapatan Penjualan Kotor (Sales)', 
+      accType: 'Pendapatan (Akrual)', 
+      nominal: revenueTotal.toLocaleString('id-ID') 
+    },
+    { 
+      no: itemNo++, 
+      parameter: '2. Diskon & Penyesuaian Harga', 
+      accType: 'Kontra-Pendapatan', 
+      nominal: '0' 
+    },
+    { 
+      no: 'REVENUES', 
+      parameter: 'TOTAL PENDAPATAN BERSIH PERIODIK', 
+      accType: 'Pendapatan Bersih', 
+      nominal: revenueTotal.toLocaleString('id-ID') 
+    }
+  ];
+
+  // Add individual expenses
+  if (expensesByCategory.length > 0) {
+    expensesByCategory.forEach(exp => {
+      tableRows.push({
+        no: itemNo++,
+        parameter: `• Beban: ${exp.category}`,
+        accType: 'Beban Operasional',
+        nominal: exp.amount.toLocaleString('id-ID')
+      });
+    });
+  } else {
+    tableRows.push({
+      no: '-',
+      parameter: '• Belum ada beban pengeluaran tercatat',
+      accType: 'Beban Operasional',
+      nominal: '0'
+    });
+  }
+
+  tableRows.push({
+    no: 'EXPENSES',
+    parameter: 'TOTAL BEBAN PENGELUARAN OPERASIONAL',
+    accType: 'Akumulasi Beban',
+    nominal: expenseTotal.toLocaleString('id-ID')
+  });
+
+  tableRows.push({
+    no: 'NET_INC',
+    parameter: 'LABA BERSIH SEBELUM PAJAK (NET EARNINGS)',
+    accType: 'Pendapatan Usaha Bersih',
+    nominal: netEarnings.toLocaleString('id-ID')
+  });
+
+  tableRows.push({
+    no: 'CASH_REC',
+    parameter: 'Realisasi Terima Kas Masuk Bersih (Actual Receipts)',
+    accType: 'Arus Kas Masuk',
+    nominal: revenueReceived.toLocaleString('id-ID')
+  });
+
+  autoTable(doc, {
+    columns: tableColumns,
+    body: tableRows,
+    startY: currentY + 4,
+    margin: { left: marginX, right: marginX },
+    theme: 'plain',
+    headStyles: {
+      fillColor: primaryCrimson,
+      textColor: [255, 255, 255] as [number, number, number],
+      fontSize: 8.5,
+      fontStyle: 'bold',
+      halign: 'left'
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: textDark,
+      font: 'helvetica',
+      cellPadding: 3.5
+    },
+    didParseCell: (data) => {
+      const isHeaderRow = ['REVENUES', 'EXPENSES', 'NET_INC', 'CASH_REC'].includes(String(data.row.cells.no?.raw));
+      if (isHeaderRow) {
+        data.cell.styles.fontStyle = 'bold';
+        if (data.row.cells.no?.raw === 'NET_INC') {
+          data.cell.styles.fillColor = [241, 185, 185]; // tinted red bg
+          data.cell.styles.textColor = primaryCrimson;
+          data.cell.styles.fontSize = 8.5;
+        } else if (data.row.cells.no?.raw === 'CASH_REC') {
+          data.cell.styles.fillColor = [209, 250, 229]; // light green bg
+          data.cell.styles.textColor = [6, 95, 70]; // dark green text
+        } else {
+          data.cell.styles.fillColor = [241, 245, 249]; // light gray bg
+        }
+      }
+    },
+    columnStyles: {
+      no: { cellWidth: 18, halign: 'center' },
+      parameter: { cellWidth: 'auto' },
+      accType: { cellWidth: 45 },
+      nominal: { cellWidth: 35, halign: 'right' }
+    }
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let finalY = (doc as any).lastAutoTable.finalY + 8;
+
+  if (finalY > 210) {
+    doc.addPage();
+    doc.setFillColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+    doc.rect(0, 0, pageWidth, 4, 'F');
+    finalY = 15;
+  }
+
+  // --- RATIO CARDS BLOCK ---
+  doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.rect(marginX, finalY, contentWidth, 22, 'FD');
+
+  const cardY = finalY + 4;
+  
+  // Margin Laba Card info text
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('MARGIN LABA USAHA %', marginX + 5, cardY);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  const marginLaba = revenueTotal > 0 ? `${Math.round((netEarnings / revenueTotal) * 100)}%` : '0%';
+  doc.text(marginLaba, marginX + 5, cardY + 5.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Profitability ratio on billing data', marginX + 5, cardY + 10.5);
+
+  // Cash Ratio Card info text
+  const col2X = marginX + 65;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('KOLEKTIBILITAS PIUTANG %', col2X, cardY);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  const cashRatio = revenueTotal > 0 ? `${Math.round((revenueReceived / revenueTotal) * 100)}%` : '0%';
+  doc.text(cashRatio, col2X, cardY + 5.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Receipt ratio to active billing', col2X, cardY + 10.5);
+
+  // Financial summary notes
+  const col3X = marginX + 125;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('INFORMASI AUDIT KAS', col3X, cardY);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(`Rp ${revenueReceived.toLocaleString('id-ID')}`, col3X, cardY + 5.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Total validated cash-inflow receipts', col3X, cardY + 10.5);
+
+  finalY += 30;
+
+  if (finalY > 235) {
+    doc.addPage();
+    doc.setFillColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+    doc.rect(0, 0, pageWidth, 4, 'F');
+    finalY = 20;
+  }
+
+  // --- SIGNATURES & VERIFICATION STAMP ---
+  const signColX = 135;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('Mengetahui & Mengesahkan,', signColX, finalY);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text('Direktur Keuangan & Internal', signColX, finalY + 4.5);
+
+  // Mock Stamp
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.setDrawColor(220, 252, 231);
+  doc.rect(signColX - 2, finalY + 8, 55, 12, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(21, 128, 61); // Green-700
+  doc.text('VERIFIED BY DIGITAL SIGN', signColX + 4, finalY + 13.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.text(`SECURE CODE: FORS-${Date.now().toString().slice(-6)}`, signColX + 4, finalY + 17.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(settings?.companyName || 'FORSDIG Billing System', signColX, finalY + 26);
+
+  // Footer text
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Laporan Rugi Laba Terbuka secara internal untuk kepentingan dewan direksi.', pageWidth / 2, pageHeight - 12, { align: 'center' });
+  doc.text('Diproses secara otomatis oleh sistem pencatatan Forsdig Billing.', pageWidth / 2, pageHeight - 8, { align: 'center' });
+
+  // Save the report file
+  doc.save(`FORSDIG_Billing_Rugi_Laba_${startDate}_sd_${endDate}.pdf`);
+};
+
+/**
+ * Generates a professional invoice PDF file and returns its Base64 string value.
+ */
+export const generateInvoicePDFBase64 = (
+  invoice: Invoice,
+  customers: Customer[],
+  settings: SystemSetting | null,
+  cashAccounts: CashAccount[]
+): string => {
+  try {
+    const doc = generateInvoicePDFDoc(invoice, customers, settings, cashAccounts);
+    const dataUri = doc.output('datauristring');
+    const commaIdx = dataUri.indexOf(',');
+    if (commaIdx !== -1) {
+      return dataUri.substring(commaIdx + 1);
+    }
+    return '';
+  } catch (err) {
+    console.error('Error generating PDF base64:', err);
+    return '';
+  }
 };

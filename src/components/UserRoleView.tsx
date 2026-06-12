@@ -6,7 +6,7 @@ export const UserRoleView: React.FC = () => {
   const { users, currentUser, updateLocalUserRole, logs } = useBilling();
   
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [newRole, setNewRole] = useState<'Super Admin' | 'Admin Keuangan' | 'Staff' | 'Viewer'>('Viewer');
+  const [newRole, setNewRole] = useState<'Super Admin' | 'Admin Keuangan' | 'Staff' | 'Viewer' | 'Sales'>('Viewer');
 
   const handleRoleChangeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +50,8 @@ export const UserRoleView: React.FC = () => {
                       ? 'bg-amber-50 text-amber-700 border border-amber-105'
                       : u.role === 'Staff'
                       ? 'bg-blue-50 text-blue-700'
+                      : u.role === 'Sales'
+                      ? 'bg-purple-50 text-purple-700 border border-purple-100'
                       : 'bg-slate-100 text-slate-600'
                   }`}>
                     {u.role}
@@ -123,6 +125,7 @@ export const UserRoleView: React.FC = () => {
                   <option value="Super Admin">Super Admin (Akses Penuh)</option>
                   <option value="Admin Keuangan">Admin Keuangan (Validasi & Jurnal)</option>
                   <option value="Staff">Staff (Catat & Cetak)</option>
+                  <option value="Sales">Sales (Kawal Omzet & Komisi)</option>
                   <option value="Viewer">Viewer (Hanya Membaca)</option>
                 </select>
               </div>

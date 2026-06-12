@@ -6,12 +6,12 @@ import {
   Bell, Clock, Sparkles, CheckCircle, ShieldCheck, FileDown
 } from 'lucide-react';
 import { Invoice, InvoiceItem, Customer, Product } from '../types';
-import { exportInvoiceToPDF } from '../utils/pdfGenerator';
+import { exportInvoiceToPDF, generateInvoicePDFBase64 } from '../utils/pdfGenerator';
 
 export const InvoiceView: React.FC = () => {
   const { 
     invoices, customers, products, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, settings, currentUser, cashAccounts, logActivity, addNotification,
-    runOverdueInvoicesCheck, sendOverdueReminderEmail, sendAllOverdueEmailReminders
+    runOverdueInvoicesCheck, sendOverdueReminderEmail, sendAllOverdueEmailReminders, users
   } = useBilling();
 
   // Navigation states
@@ -39,6 +39,10 @@ export const InvoiceView: React.FC = () => {
   // Search state
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua');
+
+  // Sales-person selection
+  const [salesId, setSalesId] = useState('');
+  const [commissionRate, setCommissionRate] = useState(5);
 
   // Creation Form State
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -114,6 +118,8 @@ export const InvoiceView: React.FC = () => {
     setDiscount(Math.max(0, inv.discount - itemsDiscountSum));
     setNotes(inv.notes || '');
     setStatus(inv.status);
+    setSalesId(inv.salesId || '');
+    setCommissionRate(inv.commissionRate ?? 5);
     setActiveSubTab('create');
   };
 
@@ -130,6 +136,8 @@ export const InvoiceView: React.FC = () => {
     setDiscount(0);
     setNotes('');
     setStatus('Draft');
+    setSalesId('');
+    setCommissionRate(5);
     setActiveSubTab('list');
   };
 
@@ -190,7 +198,11 @@ export const InvoiceView: React.FC = () => {
           total: calculatedTotal,
           notes,
           items,
-          status
+          status,
+          salesId: salesId || undefined,
+          salesName: salesId ? (users || []).find(u => u.userId === salesId || u.id === salesId)?.name : undefined,
+          commissionRate: salesId ? commissionRate : undefined,
+          commissionAmount: salesId ? Math.round(calculatedTotal * (commissionRate / 100)) : undefined
         });
         finalInvoiceNumber = editingInvoice.invoiceNumber;
       } else {
@@ -207,7 +219,11 @@ export const InvoiceView: React.FC = () => {
           total: calculatedTotal,
           notes,
           items,
-          status
+          status,
+          salesId: salesId || undefined,
+          salesName: salesId ? (users || []).find(u => u.userId === salesId || u.id === salesId)?.name : undefined,
+          commissionRate: salesId ? commissionRate : undefined,
+          commissionAmount: salesId ? Math.round(calculatedTotal * (commissionRate / 100)) : undefined
         });
         finalInvoiceNumber = calculatedInvoice.invoiceNumber;
       }
@@ -353,6 +369,23 @@ export const InvoiceView: React.FC = () => {
       </div>
     `;
 
+    // Process optional features (CC & PDF attachments)
+    const cc = emailSendCc && settings.email ? [settings.email] : undefined;
+    let attachments: any[] = [];
+    if (emailIncludePdf && selectedInvoice) {
+      try {
+        const base64Pdf = generateInvoicePDFBase64(selectedInvoice, customers, settings, cashAccounts);
+        if (base64Pdf) {
+          attachments.push({
+            filename: `Invoice-${selectedInvoice.invoiceNumber}.pdf`,
+            content: base64Pdf
+          });
+        }
+      } catch (errPdf) {
+        console.error("Gagal melampirkan PDF ke email:", errPdf);
+      }
+    }
+
     try {
       const response = await fetch('/api/send-email', {
         method: 'POST',
@@ -365,7 +398,9 @@ export const InvoiceView: React.FC = () => {
           html: htmlBody,
           companyName: settings.companyName,
           invoiceNumber: invoiceNum,
-          message
+          message,
+          cc,
+          attachments
         })
       });
 
@@ -765,6 +800,39 @@ export const InvoiceView: React.FC = () => {
                   onChange={(e) => setDueDate(e.target.value)}
                   className="w-full border border-slate-200 outline-none p-2.5 text-sm rounded-xl focus:border-red-500 cursor-pointer"
                   id="form-invoice-due-date"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 p-4 border border-slate-100 rounded-xl bg-slate-50/50">
+              {/* Sales Person Selector */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pilih Tim Sales / Marketing Terkait</label>
+                <select
+                  value={salesId}
+                  onChange={(e) => setSalesId(e.target.value)}
+                  className="w-full border border-slate-200 outline-none p-2.5 text-sm rounded-xl focus:border-red-500 bg-white cursor-pointer"
+                  id="form-invoice-sales-picker"
+                >
+                  <option value="">-- Tanpa Akun Sales --</option>
+                  {(users || []).map(u => (
+                    <option key={u.userId || u.id} value={u.userId || u.id}>{u.name} ({u.role})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Commission Rate */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 font-sans">Persentase Komisi (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={commissionRate}
+                  onChange={(e) => setCommissionRate(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-full border border-slate-200 outline-none p-2.5 text-sm rounded-xl focus:border-red-500 bg-white"
+                  placeholder="Contoh: 5%"
+                  id="form-invoice-commission-input"
                 />
               </div>
             </div>

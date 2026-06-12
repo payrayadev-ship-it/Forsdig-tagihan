@@ -6,12 +6,13 @@ import {
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { 
   Customer, Product, ProductCategory, Invoice, Payment, Expense, CashAccount, 
-  SystemNotification, ActivityLog, SystemSetting, Receivable, UserProfile, UserRole 
+  SystemNotification, ActivityLog, SystemSetting, Receivable, UserProfile, UserRole, RentContract
 } from '../types';
 import { 
   DUMMY_CUSTOMERS, DUMMY_PRODUCTS, DUMMY_INVOICES, DUMMY_PAYMENTS, 
   DUMMY_EXPENSES, DUMMY_CASH_ACCOUNTS, DUMMY_SETTING, DUMMY_RECEIVABLES 
 } from '../utils/dummyData';
+import { generateInvoicePDFBase64 } from '../utils/pdfGenerator';
 
 interface BillingContextProps {
   currentUser: UserProfile | null;
@@ -29,6 +30,7 @@ interface BillingContextProps {
   logs: ActivityLog[];
   settings: SystemSetting;
   users: (UserProfile & { id: string })[];
+  contracts: RentContract[];
   
   // Auth operations
   login: (email: string, password: string) => Promise<void>;
@@ -75,6 +77,12 @@ interface BillingContextProps {
   runOverdueInvoicesCheck: () => Promise<number>;
   sendOverdueReminderEmail: (id: string) => Promise<boolean>;
   sendAllOverdueEmailReminders: () => Promise<number>;
+  
+  // Contracts actions
+  addContract: (data: Omit<RentContract, 'id' | 'contractId' | 'contractNumber' | 'status' | 'createdAt' | 'updatedAt' | 'signatureDrawBase64' | 'signedAt'>) => Promise<RentContract>;
+  updateContract: (id: string, data: Partial<RentContract>) => Promise<void>;
+  deleteContract: (id: string) => Promise<void>;
+  signContract: (id: string, signatureBase64: string) => Promise<void>;
 }
 
 const BillingContext = createContext<BillingContextProps | undefined>(undefined);
@@ -148,6 +156,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [settings, setSettings] = useState<SystemSetting>(DUMMY_SETTING);
   const [users, setUsers] = useState<(UserProfile & { id: string })[]>([]);
+  const [contracts, setContracts] = useState<RentContract[]>([]);
 
   // Path resolution helper for absolute data segregation
   const getUserColPath = (col: string) => {
@@ -201,14 +210,21 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setLoading(false);
         });
       } else {
-        // Default to Demo admin if no user logged in yet (helps instant preview)
-        setCurrentUser({
-          userId: 'demo-super',
-          email: 'super@forsdig.id',
-          name: 'Royan Payraya (CEO)',
-          role: 'Super Admin',
-          status: 'Aktif',
-        });
+        // Retrieve persisted demo session from localStorage if present
+        const persistedDemoSession = localStorage.getItem('forsdig_demo_user_session');
+        if (persistedDemoSession) {
+          try {
+            const parsed = JSON.parse(persistedDemoSession);
+            setCurrentUser(parsed);
+            setIsDemoMode(true);
+            setLoading(false);
+            return;
+          } catch (e) {
+            console.error('Failed to parse persisted demo session', e);
+          }
+        }
+        // No auto-login anymore as user wants "Login Instan Demo" removed
+        setCurrentUser(null);
         setIsDemoMode(true);
         setLoading(false);
       }
@@ -276,6 +292,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const localSet = localStorage.getItem('forsdig_settings');
 
       const localUsers = localStorage.getItem('forsdig_users');
+      const localContracts = localStorage.getItem('forsdig_contracts');
 
       setCustomers(localCust ? JSON.parse(localCust) : DUMMY_CUSTOMERS);
       setProducts(localProd ? JSON.parse(localProd) : DUMMY_PRODUCTS);
@@ -289,6 +306,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLogs(localLogs ? JSON.parse(localLogs) : []);
       setSettings(localSet ? JSON.parse(localSet) : DUMMY_SETTING);
       setUsers(localUsers ? JSON.parse(localUsers) : DEFAULT_USERS);
+      setContracts(localContracts ? JSON.parse(localContracts) : []);
     } else {
       // Wait for complete authenticated user profile initialization before loading subcollections
       if (!currentUser?.userId) return;
@@ -337,6 +355,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'activity_logs')),
 
+        onSnapshot(collection(db, getUserColPath('contracts')), (snap) => {
+          setContracts(snap.docs.map(d => ({ id: d.id, ...d.data() } as RentContract)));
+        }, err => handleFirestoreError(err, OperationType.LIST, 'contracts')),
+
         onSnapshot(collection(db, getUserColPath('settings')), (snap) => {
           if (!snap.empty) {
             setSettings({ id: snap.docs[0].id, ...snap.docs[0].data() } as SystemSetting);
@@ -365,8 +387,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.setItem('forsdig_logs', JSON.stringify(logs));
       localStorage.setItem('forsdig_settings', JSON.stringify(settings));
       localStorage.setItem('forsdig_users', JSON.stringify(users));
+      localStorage.setItem('forsdig_contracts', JSON.stringify(contracts));
     }
-  }, [isDemoMode, customers, products, productCategories, invoices, payments, expenses, cashAccounts, receivables, notifications, logs, settings, users]);
+  }, [isDemoMode, customers, products, productCategories, invoices, payments, expenses, cashAccounts, receivables, notifications, logs, settings, users, contracts]);
 
   // Automatic Background Overdue Detector
   useEffect(() => {
@@ -514,6 +537,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         user = newUser;
       }
       setCurrentUser(user);
+      localStorage.setItem('forsdig_demo_user_session', JSON.stringify(user));
       setIsDemoMode(true);
       await addNotification('Login Berhasil', `Selamat datang kembali, ${user.name}!`, 'success');
       await logActivity(`Login masuk sebagai ${user.name}`, 'Auth');
@@ -588,11 +612,13 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       status: 'Aktif',
     };
     setCurrentUser(user);
+    localStorage.setItem('forsdig_demo_user_session', JSON.stringify(user));
     logActivity(`Login ke sistem sebagai demo [${role}]`, 'Auth');
     addNotification('Login Mode Demo', `Pengguna berhasil login sebagai ${role}`, 'info');
   };
 
   const logout = async () => {
+    localStorage.removeItem('forsdig_demo_user_session');
     await logActivity('Keluar dari aplikasi', 'Auth');
     if (!isDemoMode) {
       await signOut(auth);
@@ -1058,20 +1084,95 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const cust = customers.find(c => c.id === inv.customerId);
     const clientEmail = cust?.email || 'klien@perusahaan.com';
 
-    // Generate dashboard notification
-    await addNotification(
-      `Email Pengingat Dikirim: ${inv.invoiceNumber}`,
-      `Dokumen peringatan keterlambatan pembayaran Invoice ${inv.invoiceNumber} dikirim otomatis ke email ${clientEmail}.`,
-      'success'
-    );
+    const formattedAmt = inv.total.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+    const itemDetails = (inv.items || [])
+      .map(item => `- ${item.name || 'Layanan'} (${item.qty} x Rp ${item.price.toLocaleString('id-ID')})`)
+      .join('\n');
+    const message = `Yth. ${cust?.name || inv.customerName},\n\n` +
+      `Ini adalah surat pengingat resmi bahwa pembayaran Invoice #${inv.invoiceNumber} dari ${settings.companyName || 'FORSDIG'} senilai ${formattedAmt} telah MELEWATI JATUH TEMPO (${inv.dueDate}).\n\n` +
+      `Ringkasan Item:\n${itemDetails}\n\n` +
+      `Mohon segera lakukan pelunasan tagihan melalui scan QRIS atau transfer ke rekening resmi kami.\n\n` +
+      `Terima kasih,\n${settings.companyName || 'FORSDIG'}`;
 
-    // Write log activity
-    await logActivity(
-      `Sistem otomatisasi mengirim surat tagihan pengingat untuk Invoice ${inv.invoiceNumber} ke ${clientEmail}`,
-      'Komunikasi_Email'
-    );
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <div style="background-color: #D32F2F; color: #ffffff; padding: 24px; text-align: center;">
+          <h2 style="margin: 0; font-size: 18px; letter-spacing: 0.05em; font-weight: 800;">${settings.companyName || 'FORSDIG'} - PENGINGAT JATUH TEMPO</h2>
+          <p style="margin: 4px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.8);">Peringatan Keterlambatan Pembayaran</p>
+        </div>
+        <div style="padding: 24px; background-color: #ffffff; font-size: 13px; line-height: 1.6;">
+          <p style="margin-top: 0; font-weight: bold;">Yth. Klien,</p>
+          <p style="white-space: pre-wrap;">${message.replace(/\n/g, '<br>')}</p>
+          <div style="margin: 20px 0; padding: 15px; background-color: #fbd5d5; border-radius: 8px; border-left: 4px solid #D32F2F; font-size: 12px; color: #9b1c1c;">
+            <strong>PEMBERITAHUAN JATUH TEMPO:</strong> Invoice ini telah melewati batas waktu pembayaran. Harap segera melunasi untuk menghindari denda administratif atau penangguhan layanan.
+          </div>
+        </div>
+        <div style="background-color: #f1f5f9; padding: 16px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0;">
+          <p style="margin: 4px 0;">Hubungi kami: Telepon ${settings.phone || '-'} | Email: ${settings.email || '-'}</p>
+          <p style="margin: 4px 0 0 0;">&copy; ${new Date().getFullYear()} ${settings.companyName || 'FORSDIG'}. Seluruh hak cipta dilindungi.</p>
+        </div>
+      </div>
+    `;
 
-    return true;
+    let attachments: any[] = [];
+    try {
+      const base64Pdf = generateInvoicePDFBase64(inv, customers, settings, cashAccounts);
+      if (base64Pdf) {
+        attachments.push({
+          filename: `Invoice-${inv.invoiceNumber}.pdf`,
+          content: base64Pdf
+        });
+      }
+    } catch (errPdf) {
+      console.error("Gagal men-generate PDF lampiran:", errPdf);
+    }
+
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: clientEmail,
+          subject: `[PERINGATAN JATUH TEMPO] Invoice #${inv.invoiceNumber} - Telah Melewati Batas Waktu`,
+          html: htmlBody,
+          companyName: settings.companyName,
+          invoiceNumber: inv.invoiceNumber,
+          message,
+          attachments
+        })
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (response.ok && resData.success) {
+        const typeLog = resData.sandbox ? " (Sandbox Mode)" : " (Resend API)";
+        
+        // Generate dashboard notification
+        await addNotification(
+          `Email Pengingat Terkirim: ${inv.invoiceNumber}`,
+          `Dokumen peringatan keterlambatan pembayaran Invoice ${inv.invoiceNumber} berhasil terkirim ke email ${clientEmail}${typeLog}.`,
+          'success'
+        );
+
+        // Write log activity
+        await logActivity(
+          `Sistem otomatisasi sukses mengirim surat tagihan pengingat untuk Invoice ${inv.invoiceNumber} ke ${clientEmail}${typeLog}`,
+          'Komunikasi_Email'
+        );
+        return true;
+      } else {
+        throw new Error(resData.error || `HTTP ${response.status}`);
+      }
+    } catch (err: any) {
+      console.error("Gagal mengirim email pengingat otomatis:", err);
+      await addNotification(
+        `Gagal Kirim Pengingat: ${inv.invoiceNumber}`,
+        `Sistem gagal mengirimkan email pengingat ke ${clientEmail}: ${err.message || err}`,
+        'danger'
+      );
+      return false;
+    }
   };
 
   const sendAllOverdueEmailReminders = async () => {
@@ -1312,6 +1413,98 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await logActivity('Memperbarui profil & preferensi billing perusahaan', 'Sistem');
   };
 
+  // 12. Rental Contracts
+  const addContract = async (data: Omit<RentContract, 'id' | 'contractId' | 'contractNumber' | 'status' | 'createdAt' | 'updatedAt' | 'signatureDrawBase64' | 'signedAt'>): Promise<RentContract> => {
+    const id = `cnt-${Date.now()}`;
+    const nextNum = contracts.length + 1;
+    const contractNumber = `CNT/${new Date().toISOString().replace(/-/g, '').slice(0, 8)}/${String(nextNum).padStart(4, '0')}`;
+    const timestamp = new Date().toISOString().split('T')[0];
+
+    const newContract: RentContract = {
+      id,
+      contractId: id,
+      contractNumber,
+      status: 'Draft',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      ...data,
+      rentalAmount: Number(data.rentalAmount)
+    };
+
+    if (isDemoMode) {
+      setContracts(prev => [...prev, newContract]);
+    } else {
+      try {
+        await setDoc(doc(db, getUserColPath('contracts'), id), newContract);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `contracts/${id}`);
+      }
+    }
+
+    await logActivity(`Membuat draf kontrak sewa baru: ${contractNumber} untuk ${data.customerName}`, 'Kontrak Sewa');
+    await addNotification('Kontrak Sewa Baru Tercatat', `Draf kontrak ${contractNumber} berhasil dibuat`, 'success');
+    return newContract;
+  };
+
+  const updateContract = async (id: string, data: Partial<RentContract>) => {
+    const timestamp = new Date().toISOString().split('T')[0];
+    if (isDemoMode) {
+      setContracts(prev => prev.map(c => c.id === id ? { ...c, ...data, updatedAt: timestamp } : c));
+    } else {
+      try {
+        await setDoc(doc(db, getUserColPath('contracts'), id), { ...data, updatedAt: timestamp }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `contracts/${id}`);
+      }
+    }
+    await logActivity(`Memperbarui kontrak sewa ID: ${id}`, 'Kontrak Sewa');
+  };
+
+  const deleteContract = async (id: string) => {
+    if (isDemoMode) {
+      setContracts(prev => prev.filter(c => c.id !== id));
+    } else {
+      try {
+        await deleteDoc(doc(db, getUserColPath('contracts'), id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `contracts/${id}`);
+      }
+    }
+    await logActivity(`Menghapus kontrak sewa ID: ${id}`, 'Kontrak Sewa');
+  };
+
+  const signContract = async (id: string, signatureBase64: string) => {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const contract = contracts.find(c => c.id === id);
+    if (!contract) return;
+
+    const signatureTime = new Date().toLocaleString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    if (isDemoMode) {
+      setContracts(prev => prev.map(c => c.id === id ? { 
+        ...c, 
+        status: 'Aktif', 
+        signatureDrawBase64: signatureBase64, 
+        signedAt: signatureTime,
+        updatedAt: timestamp 
+      } : c));
+    } else {
+      try {
+        await setDoc(doc(db, getUserColPath('contracts'), id), { 
+          status: 'Aktif', 
+          signatureDrawBase64: signatureBase64, 
+          signedAt: signatureTime,
+          updatedAt: timestamp 
+        }, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `contracts/${id}`);
+      }
+    }
+
+    await logActivity(`Kontrak sewa ${contract.contractNumber} telah ditandatangani secara elektronik`, 'Kontrak Sewa');
+    await addNotification('Tanda Tangan Kontrak Sewa', `Kontrak ${contract.contractNumber} telah aktif setelah ditandatangani`, 'success');
+  };
+
   return (
     <BillingContext.Provider value={{
       currentUser,
@@ -1329,6 +1522,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       logs,
       settings,
       users,
+      contracts,
       login,
       register,
       loginWithGoogle,
@@ -1364,7 +1558,11 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       seedInitialData,
       runOverdueInvoicesCheck,
       sendOverdueReminderEmail,
-      sendAllOverdueEmailReminders
+      sendAllOverdueEmailReminders,
+      addContract,
+      updateContract,
+      deleteContract,
+      signContract
     }}>
       {children}
     </BillingContext.Provider>

@@ -3,7 +3,7 @@ import { useBilling } from '../context/BillingContext';
 import { 
   LayoutDashboard, Users, ShoppingBag, Receipt, CreditCard, 
   AlertTriangle, ArrowDownCircle, Landmark, BarChart3, 
-  Bell, ShieldCheck, Settings, LogOut, Menu, X, Database
+  Bell, ShieldCheck, Settings, LogOut, Menu, X, Database, PenTool
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -22,16 +22,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { currentUser, logout, notifications, seedInitialData, isDemoMode } = useBilling();
   
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'pelanggan', label: 'Pelanggan', icon: Users, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'produk', label: 'Produk & Layanan', icon: ShoppingBag, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'invoice', label: 'Invoice (Tagihan)', icon: Receipt, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'pembayaran', label: 'Pembayaran', icon: CreditCard, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'piutang', label: 'Piutang Dues', icon: AlertTriangle, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'pengeluaran', label: 'Pengeluaran', icon: ArrowDownCircle, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'kas', label: 'Kas & Bank', icon: Landmark, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'laporan', label: 'Laporan Keuangan', icon: BarChart3, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
-    { id: 'notifikasi', label: 'Notifikasi', icon: Bell, badge: notifications.filter(n => !n.isRead).length, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'] },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'pelanggan', label: 'Pelanggan', icon: Users, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'produk', label: 'Produk & Layanan', icon: ShoppingBag, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'invoice', label: 'Invoice (Tagihan)', icon: Receipt, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'pembayaran', label: 'Pembayaran', icon: CreditCard, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'piutang', label: 'Piutang Dues', icon: AlertTriangle, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'pengeluaran', label: 'Pengeluaran', icon: ArrowDownCircle, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'kas', label: 'Kas & Bank', icon: Landmark, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'laporan', label: 'Laporan Keuangan', icon: BarChart3, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'sales', label: 'Sales & Komisi', icon: Users, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'sewa', label: 'Kontrak Sewa', icon: PenTool, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'notifikasi', label: 'Notifikasi', icon: Bell, badge: notifications.filter(n => !n.isRead).length, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
     { id: 'pengguna', label: 'Hak Akses & Log', icon: ShieldCheck, roles: ['Super Admin', 'Admin Keuangan'] },
     { id: 'pengaturan', label: 'Pengaturan', icon: Settings, roles: ['Super Admin'] }
   ];
