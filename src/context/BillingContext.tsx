@@ -6,7 +6,8 @@ import {
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { 
   Customer, Product, ProductCategory, Invoice, Payment, Expense, CashAccount, 
-  SystemNotification, ActivityLog, SystemSetting, Receivable, UserProfile, UserRole, RentContract
+  SystemNotification, ActivityLog, SystemSetting, Receivable, UserProfile, UserRole, RentContract,
+  CommissionPayout, SalesTarget, PayoutStatus
 } from '../types';
 import { 
   DUMMY_CUSTOMERS, DUMMY_PRODUCTS, DUMMY_INVOICES, DUMMY_PAYMENTS, 
@@ -31,6 +32,8 @@ interface BillingContextProps {
   settings: SystemSetting;
   users: (UserProfile & { id: string })[];
   contracts: RentContract[];
+  payouts: CommissionPayout[];
+  targets: SalesTarget[];
   
   // Auth operations
   login: (email: string, password: string) => Promise<void>;
@@ -38,8 +41,8 @@ interface BillingContextProps {
   loginWithGoogle: () => Promise<void>;
   loginAsDemo: (role: UserRole) => void;
   logout: () => Promise<void>;
-  updateUserRole: (userId: string, role: UserRole) => Promise<void>;
-  updateLocalUserRole: (userId: string, role: UserRole) => Promise<void>;
+  updateUserRole: (userId: string, role: UserRole, commissionRate?: number) => Promise<void>;
+  updateLocalUserRole: (userId: string, role: UserRole, commissionRate?: number) => Promise<void>;
   
   // DB actions
   addCustomer: (data: Omit<Customer, 'id' | 'customerId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
@@ -82,7 +85,12 @@ interface BillingContextProps {
   addContract: (data: Omit<RentContract, 'id' | 'contractId' | 'contractNumber' | 'status' | 'createdAt' | 'updatedAt' | 'signatureDrawBase64' | 'signedAt'>) => Promise<RentContract>;
   updateContract: (id: string, data: Partial<RentContract>) => Promise<void>;
   deleteContract: (id: string) => Promise<void>;
-  signContract: (id: string, signatureBase64: string) => Promise<void>;
+  signContract: (id: string, signatureBase64: string, signatureQrBase64?: string) => Promise<void>;
+
+  // Sales & Commission Actions
+  addPayoutRequest: (data: Omit<CommissionPayout, 'id' | 'payoutId' | 'payoutNumber' | 'status' | 'requestedAt'>) => Promise<CommissionPayout>;
+  updatePayoutStatus: (id: string, status: PayoutStatus, notes?: string) => Promise<void>;
+  updateSalesTarget: (salesId: string, salesName: string, month: string, targetAmount: number) => Promise<void>;
 }
 
 const BillingContext = createContext<BillingContextProps | undefined>(undefined);
@@ -157,6 +165,8 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [settings, setSettings] = useState<SystemSetting>(DUMMY_SETTING);
   const [users, setUsers] = useState<(UserProfile & { id: string })[]>([]);
   const [contracts, setContracts] = useState<RentContract[]>([]);
+  const [payouts, setPayouts] = useState<CommissionPayout[]>([]);
+  const [targets, setTargets] = useState<SalesTarget[]>([]);
 
   // Path resolution helper for absolute data segregation
   const getUserColPath = (col: string) => {
@@ -293,6 +303,8 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const localUsers = localStorage.getItem('forsdig_users');
       const localContracts = localStorage.getItem('forsdig_contracts');
+      const localPayouts = localStorage.getItem('forsdig_payouts');
+      const localTargets = localStorage.getItem('forsdig_targets');
 
       setCustomers(localCust ? JSON.parse(localCust) : DUMMY_CUSTOMERS);
       setProducts(localProd ? JSON.parse(localProd) : DUMMY_PRODUCTS);
@@ -307,6 +319,8 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSettings(localSet ? JSON.parse(localSet) : DUMMY_SETTING);
       setUsers(localUsers ? JSON.parse(localUsers) : DEFAULT_USERS);
       setContracts(localContracts ? JSON.parse(localContracts) : []);
+      setPayouts(localPayouts ? JSON.parse(localPayouts) : []);
+      setTargets(localTargets ? JSON.parse(localTargets) : []);
     } else {
       // Wait for complete authenticated user profile initialization before loading subcollections
       if (!currentUser?.userId) return;
@@ -359,6 +373,14 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setContracts(snap.docs.map(d => ({ id: d.id, ...d.data() } as RentContract)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'contracts')),
 
+        onSnapshot(collection(db, getUserColPath('payouts')), (snap) => {
+          setPayouts(snap.docs.map(d => ({ id: d.id, ...d.data() } as CommissionPayout)));
+        }, err => handleFirestoreError(err, OperationType.LIST, 'payouts')),
+
+        onSnapshot(collection(db, getUserColPath('targets')), (snap) => {
+          setTargets(snap.docs.map(d => ({ id: d.id, ...d.data() } as SalesTarget)));
+        }, err => handleFirestoreError(err, OperationType.LIST, 'targets')),
+
         onSnapshot(collection(db, getUserColPath('settings')), (snap) => {
           if (!snap.empty) {
             setSettings({ id: snap.docs[0].id, ...snap.docs[0].data() } as SystemSetting);
@@ -388,8 +410,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.setItem('forsdig_settings', JSON.stringify(settings));
       localStorage.setItem('forsdig_users', JSON.stringify(users));
       localStorage.setItem('forsdig_contracts', JSON.stringify(contracts));
+      localStorage.setItem('forsdig_payouts', JSON.stringify(payouts));
+      localStorage.setItem('forsdig_targets', JSON.stringify(targets));
     }
-  }, [isDemoMode, customers, products, productCategories, invoices, payments, expenses, cashAccounts, receivables, notifications, logs, settings, users, contracts]);
+  }, [isDemoMode, customers, products, productCategories, invoices, payments, expenses, cashAccounts, receivables, notifications, logs, settings, users, contracts, payouts, targets]);
 
   // Automatic Background Overdue Detector
   useEffect(() => {
@@ -627,11 +651,15 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsDemoMode(true);
   };
 
-  const updateUserRole = async (userId: string, role: UserRole) => {
+  const updateUserRole = async (userId: string, role: UserRole, commissionRate?: number) => {
     if (isDemoMode) {
       const updatedUsers = users.map(u => {
         if (u.userId === userId || u.id === userId) {
-          return { ...u, role };
+          return { 
+            ...u, 
+            role, 
+            commissionRate: role === 'Sales' ? (commissionRate !== undefined ? Number(commissionRate) : u.commissionRate) : undefined 
+          };
         }
         return u;
       });
@@ -639,21 +667,35 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.setItem('forsdig_users', JSON.stringify(updatedUsers));
 
       if (currentUser && (currentUser.userId === userId || currentUser.userId === `demo-${userId}`)) {
-        setCurrentUser(p => p ? { ...p, role } : null);
+        setCurrentUser(p => p ? { 
+          ...p, 
+          role, 
+          commissionRate: role === 'Sales' ? (commissionRate !== undefined ? Number(commissionRate) : p.commissionRate) : undefined 
+        } : null);
       }
-      await logActivity(`Mengubah role user ${userId} menjadi ${role}`, 'Pengguna');
+      
+      const details = role === 'Sales' && commissionRate !== undefined ? ` dengan komisi ${commissionRate}%` : '';
+      await logActivity(`Mengubah role user ${userId} menjadi ${role}${details}`, 'Pengguna');
     } else {
       try {
-        await setDoc(doc(db, 'users', userId), { role }, { merge: true });
-        await logActivity(`Mengubah role user ${userId} menjadi ${role}`, 'Pengguna');
+        const updateData: any = { role };
+        if (role === 'Sales' && commissionRate !== undefined) {
+          updateData.commissionRate = Number(commissionRate);
+        } else if (role !== 'Sales') {
+          updateData.commissionRate = null;
+        }
+        await setDoc(doc(db, 'users', userId), updateData, { merge: true });
+        
+        const details = role === 'Sales' && commissionRate !== undefined ? ` dengan komisi ${commissionRate}%` : '';
+        await logActivity(`Mengubah role user ${userId} menjadi ${role}${details}`, 'Pengguna');
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
       }
     }
   };
 
-  const updateLocalUserRole = async (userId: string, role: UserRole) => {
-    await updateUserRole(userId, role);
+  const updateLocalUserRole = async (userId: string, role: UserRole, commissionRate?: number) => {
+    await updateUserRole(userId, role, commissionRate);
   };
 
   // 5. customer CRUD
@@ -1473,7 +1515,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await logActivity(`Menghapus kontrak sewa ID: ${id}`, 'Kontrak Sewa');
   };
 
-  const signContract = async (id: string, signatureBase64: string) => {
+  const signContract = async (id: string, signatureBase64: string, signatureQrBase64?: string) => {
     const timestamp = new Date().toISOString().split('T')[0];
     const contract = contracts.find(c => c.id === id);
     if (!contract) return;
@@ -1485,17 +1527,22 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...c, 
         status: 'Aktif', 
         signatureDrawBase64: signatureBase64, 
+        signatureQrBase64: signatureQrBase64 || c.signatureQrBase64,
         signedAt: signatureTime,
         updatedAt: timestamp 
       } : c));
     } else {
       try {
-        await setDoc(doc(db, getUserColPath('contracts'), id), { 
+        const updateObj: any = { 
           status: 'Aktif', 
           signatureDrawBase64: signatureBase64, 
           signedAt: signatureTime,
           updatedAt: timestamp 
-        }, { merge: true });
+        };
+        if (signatureQrBase64) {
+          updateObj.signatureQrBase64 = signatureQrBase64;
+        }
+        await setDoc(doc(db, getUserColPath('contracts'), id), updateObj, { merge: true });
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `contracts/${id}`);
       }
@@ -1503,6 +1550,88 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     await logActivity(`Kontrak sewa ${contract.contractNumber} telah ditandatangani secara elektronik`, 'Kontrak Sewa');
     await addNotification('Tanda Tangan Kontrak Sewa', `Kontrak ${contract.contractNumber} telah aktif setelah ditandatangani`, 'success');
+  };
+
+  const addPayoutRequest = async (data: Omit<CommissionPayout, 'id' | 'payoutId' | 'payoutNumber' | 'status' | 'requestedAt'>): Promise<CommissionPayout> => {
+    const id = `payo-${Date.now()}`;
+    const nextNum = payouts.length + 1;
+    const payoutNumber = `PAYO/${new Date().toISOString().replace(/-/g, '').slice(0, 8)}/${String(nextNum).padStart(4, '0')}`;
+    const timestamp = new Date().toISOString().split('T')[0];
+
+    const newPayout: CommissionPayout = {
+      id,
+      payoutId: id,
+      payoutNumber,
+      status: 'Diajukan',
+      requestedAt: timestamp,
+      ...data,
+      amount: Number(data.amount)
+    };
+
+    if (isDemoMode) {
+      setPayouts(prev => [...prev, newPayout]);
+    } else {
+      try {
+        await setDoc(doc(db, getUserColPath('payouts'), id), newPayout);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `payouts/${id}`);
+      }
+    }
+
+    await logActivity(`Mengajukan pencairan komisi Rp ${newPayout.amount.toLocaleString('id-ID')} untuk ${data.salesName}`, 'Sales & Komisi');
+    await addNotification('Pengajuan Pencairan Komisi', `Pengajuan ${payoutNumber} senilai Rp ${newPayout.amount.toLocaleString('id-ID')} berhasil diajukan`, 'success');
+    return newPayout;
+  };
+
+  const updatePayoutStatus = async (id: string, status: PayoutStatus, notes?: string) => {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const payout = payouts.find(p => p.id === id);
+    if (!payout) return;
+
+    const dataUpdate: Partial<CommissionPayout> = {
+      status,
+      processedAt: timestamp,
+      notes: notes || ''
+    };
+
+    if (isDemoMode) {
+      setPayouts(prev => prev.map(p => p.id === id ? { ...p, ...dataUpdate } : p));
+    } else {
+      try {
+        await setDoc(doc(db, getUserColPath('payouts'), id), dataUpdate, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `payouts/${id}`);
+      }
+    }
+
+    await logActivity(`Mengubah status pencairan komisi ${payout.payoutNumber} menjadi ${status}`, 'Sales & Komisi');
+    await addNotification('Status Pencairan Diperbarui', `Pengajuan ${payout.payoutNumber} kini berstatus ${status}`, status === 'Selesai' ? 'success' : 'warning');
+  };
+
+  const updateSalesTarget = async (salesId: string, salesName: string, month: string, targetAmount: number) => {
+    const id = `trg-${salesId}-${month}`;
+    const newTarget: SalesTarget = {
+      id,
+      salesId,
+      salesName,
+      month,
+      targetAmount: Number(targetAmount)
+    };
+
+    if (isDemoMode) {
+      setTargets(prev => {
+        const filtered = prev.filter(t => t.id !== id);
+        return [...filtered, newTarget];
+      });
+    } else {
+      try {
+        await setDoc(doc(db, getUserColPath('targets'), id), newTarget);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `targets/${id}`);
+      }
+    }
+
+    await logActivity(`Memperbarui target penjualan ${salesName} untuk bulan ${month} sebesar Rp ${Number(targetAmount).toLocaleString('id-ID')}`, 'Sales & Komisi');
   };
 
   return (
@@ -1523,6 +1652,8 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       settings,
       users,
       contracts,
+      payouts,
+      targets,
       login,
       register,
       loginWithGoogle,
@@ -1562,7 +1693,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       addContract,
       updateContract,
       deleteContract,
-      signContract
+      signContract,
+      addPayoutRequest,
+      updatePayoutStatus,
+      updateSalesTarget
     }}>
       {children}
     </BillingContext.Provider>

@@ -810,13 +810,24 @@ export const InvoiceView: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Pilih Tim Sales / Marketing Terkait</label>
                 <select
                   value={salesId}
-                  onChange={(e) => setSalesId(e.target.value)}
+                  onChange={(e) => {
+                    const sid = e.target.value;
+                    setSalesId(sid);
+                    const selectedAgent = users.find(u => (u.userId === sid || u.id === sid));
+                    if (selectedAgent && selectedAgent.commissionRate !== undefined) {
+                      setCommissionRate(selectedAgent.commissionRate);
+                    } else {
+                      setCommissionRate(5);
+                    }
+                  }}
                   className="w-full border border-slate-200 outline-none p-2.5 text-sm rounded-xl focus:border-red-500 bg-white cursor-pointer"
                   id="form-invoice-sales-picker"
                 >
                   <option value="">-- Tanpa Akun Sales --</option>
                   {(users || []).map(u => (
-                    <option key={u.userId || u.id} value={u.userId || u.id}>{u.name} ({u.role})</option>
+                    <option key={u.userId || u.id} value={u.userId || u.id}>
+                      {u.name} ({u.role}){u.commissionRate !== undefined ? ` - Komisi ${u.commissionRate}%` : ''}
+                    </option>
                   ))}
                 </select>
               </div>

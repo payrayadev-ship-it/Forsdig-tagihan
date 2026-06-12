@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Invoice, Customer, CashAccount, SystemSetting } from '../types';
+import { Invoice, Customer, CashAccount, SystemSetting, RentContract } from '../types';
 
 /**
  * Generates and downloads a professional invoice PDF using jsPDF and jspdf-autotable.
@@ -843,4 +843,298 @@ export const generateInvoicePDFBase64 = (
     console.error('Error generating PDF base64:', err);
     return '';
   }
+};
+
+/**
+ * Generates and downloads a highly styled professional legal contract PDF
+ */
+export const generateContractPDF = (
+  contract: RentContract,
+  settings: SystemSetting | null
+) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 20; // 20mm margin standard for letters
+  const contentWidth = pageWidth - (marginX * 2); // 170mm
+
+  const primaryCrimson: [number, number, number] = [190, 24, 74]; // Crimson accent (matching Red 600/650)
+  const textDark: [number, number, number] = [30, 41, 59]; // Slate 800
+  const textMuted: [number, number, number] = [100, 116, 139]; // Slate 500
+  const borderLight: [number, number, number] = [226, 232, 240]; // Slate 200
+
+  // 1. Decorative top band
+  doc.setFillColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.rect(0, 0, pageWidth, 4.5, 'F');
+
+  let currentY = 18;
+
+  // Company Letterhead Brand Header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(settings?.companyName?.toUpperCase() || 'FORSDIG BILLING ERP SYSTEM', marginX, currentY);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  const addressLines = doc.splitTextToSize(settings?.address || 'Komp. Ruko Digital Multi-Sewa No. 2A, DKI Jakarta', 110);
+  doc.text(addressLines, marginX, currentY + 3.5);
+
+  // Status Badge right-aligned
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  let statusBg = [241, 245, 249];
+  let statusText = [71, 85, 105];
+  if (contract.status === 'Aktif') {
+    statusBg = [220, 252, 231];
+    statusText = [21, 128, 61];
+  } else if (contract.status === 'Draft') {
+    statusBg = [241, 245, 249];
+    statusText = [71, 85, 105];
+  } else if (contract.status === 'Selesai') {
+    statusBg = [219, 234, 254];
+    statusText = [30, 64, 175];
+  }
+
+  doc.setFillColor(statusBg[0], statusBg[1], statusBg[2]);
+  const statusStr = `STAMP: ${contract.status.toUpperCase()}`;
+  const statusWidth = doc.getTextWidth(statusStr) + 6;
+  doc.rect(pageWidth - marginX - statusWidth, currentY - 3, statusWidth, 5.5, 'F');
+  
+  doc.setTextColor(statusText[0], statusText[1], statusText[2]);
+  doc.setFontSize(7.5);
+  doc.text(statusStr, pageWidth - marginX - statusWidth + 3, currentY + 0.8);
+
+  currentY += (addressLines.length * 4) + 6;
+
+  // Thin separator line
+  doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+  doc.setLineWidth(0.35);
+  doc.line(marginX, currentY, pageWidth - marginX, currentY);
+
+  currentY += 10;
+
+  // Document Title
+  doc.setFont('times', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('SURAT PERJANJIAN SEWA MENYEWA', pageWidth / 2, currentY, { align: 'center' });
+
+  currentY += 5.5;
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.text(`No: ${contract.contractNumber}`, pageWidth / 2, currentY, { align: 'center' });
+
+  currentY += 12;
+
+  // Preamble
+  doc.setFont('times', 'normal');
+  doc.setFontSize(10.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+
+  const introText = `Yang bertanda tangan di bawah ini, sepakat untuk mengadakan perjanjian sewa menyewa elektronik legal pada hari ini, tanggal ${contract.createdAt || new Date().toLocaleString('id-ID')}, oleh dan antara para pihak di bawah ini:`;
+  const splitIntro = doc.splitTextToSize(introText, contentWidth);
+  doc.text(splitIntro, marginX, currentY);
+  currentY += (splitIntro.length * 5) + 6;
+
+  // Party Details
+  doc.setFont('times', 'bold');
+  doc.text('I. PIHAK PERTAMA (Pemilik / Pemberi Sewa):', marginX, currentY);
+  currentY += 5;
+  doc.setFont('times', 'normal');
+  doc.text(`   Nama Perusahaan   : ${settings?.companyName || 'FORSDIG Billing ERP System'}`, marginX, currentY);
+  currentY += 4.5;
+  doc.text(`   Alamat Kantor     : ${settings?.address || 'Komp. Ruko Digital Multi-Sewa No. 2A, Jakarta'}`, marginX, currentY);
+  currentY += 4.5;
+  doc.text(`   Kontak / Email    : ${settings?.email || 'admin@forsdig.id'} (${settings?.phone || '021-9922881'})`, marginX, currentY);
+  
+  currentY += 8;
+  doc.setFont('times', 'bold');
+  doc.text('II. PIHAK KEDUA (Penyewa / Pelanggan):', marginX, currentY);
+  currentY += 5;
+  doc.setFont('times', 'normal');
+  doc.text(`   Nama Penyewa      : ${contract.customerName} (${contract.customerTitle || 'Direktur PT. Foresyndo Global Indonesia'})`, marginX, currentY);
+  currentY += 4.5;
+  doc.text(`   E-mail Surat      : ${contract.customerEmail}`, marginX, currentY);
+  currentY += 4.5;
+  doc.text(`   No. WhatsApp      : ${contract.customerPhone}`, marginX, currentY);
+
+  currentY += 10;
+
+  // Contract Clauses (Pasal-Pasal)
+  doc.setFont('times', 'bold');
+  doc.text('PASAL 1 - OBJEK PERJANJIAN SEWA', marginX, currentY);
+  currentY += 5;
+  doc.setFont('times', 'normal');
+  const objekText = `Pihak Pertama dengan ini setuju untuk menyewakan kepada Pihak Kedua, dan Pihak Kedua dengan ini setuju untuk menyewa obyek sewa berupa barang / properti / layanan dengan deskripsi lengkap sebagai berikut:\n"${contract.propertyName}"`;
+  const splitObjek = doc.splitTextToSize(objekText, contentWidth);
+  doc.text(splitObjek, marginX, currentY);
+  currentY += (splitObjek.length * 5) + 6;
+
+  doc.setFont('times', 'bold');
+  doc.text('PASAL 2 - MASA BERLAKU & TERMIN SEWA', marginX, currentY);
+  currentY += 5;
+  doc.setFont('times', 'normal');
+  const periodText = `Perjanjian sewa menyewa ini berlaku dan mengikat secara hukum terhitung sejak tanggal ${contract.startDate} sampai dengan tanggal ${contract.endDate}. Format termin penagihan sewa ini diatur secara berkala dengan rincian durasi "${contract.paymentTerm}".`;
+  const splitPeriod = doc.splitTextToSize(periodText, contentWidth);
+  doc.text(splitPeriod, marginX, currentY);
+  currentY += (splitPeriod.length * 5) + 6;
+
+  doc.setFont('times', 'bold');
+  doc.text('PASAL 3 - NILAI TRANSAKSI & BIAYA', marginX, currentY);
+  currentY += 5;
+  doc.setFont('times', 'normal');
+  const biayaTerbilang = angkaKeKata(contract.rentalAmount);
+  const priceText = `Biaya pengadaan sewa yang disepakati oleh kedua belah Pihak adalah sebesar Rp ${contract.rentalAmount.toLocaleString('id-ID')} (Terbilang: ${biayaTerbilang || 'Nol'} Rupiah) yang dibebankan per termin sewa berjalan dan wajib diselesaikan tepat waktu.`;
+  const splitPrice = doc.splitTextToSize(priceText, contentWidth);
+  doc.text(splitPrice, marginX, currentY);
+  currentY += (splitPrice.length * 5) + 6;
+
+  // Let's add page break if needed
+  if (currentY > 210) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  doc.setFont('times', 'bold');
+  doc.text('PASAL 4 - SYARAT & KETENTUAN KHUSUS (T&C)', marginX, currentY);
+  currentY += 5;
+  doc.setFont('times', 'normal');
+  
+  // Custom box container for terms and conditions
+  const termsText = contract.termsAndConditions || '1. Penyewa menjaga barang sewa tetap bersih & utuh.\n2. Pembayaran tepat waktu sesuai tgl jatuh tempo.';
+  const splitTerms = doc.splitTextToSize(termsText, contentWidth - 10);
+  const boxHeight = (splitTerms.length * 4.5) + 7;
+  
+  doc.setFillColor(250, 250, 250);
+  doc.setDrawColor(226, 232, 240);
+  doc.rect(marginX, currentY, contentWidth, boxHeight, 'FD');
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(80, 80, 80);
+  doc.text(splitTerms, marginX + 5, currentY + 5);
+  
+  currentY += boxHeight + 10;
+
+  if (currentY > 210) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  // Legal closure
+  doc.setFont('times', 'italic');
+  doc.setFontSize(9.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  const legalNote = `Perjanjian ini dibuat secara elektronik dengan validasi legalitas tinggi dan diakui sah demi hukum berdasarkan Pasal 5 UU ITE No. 11 Tahun 2008 Republik Indonesia. Kedua belah pihak mematuhi aturan sanksi yang berlaku jika terjadi penyalahgunaan objek sewa.`;
+  const splitLegalNote = doc.splitTextToSize(legalNote, contentWidth);
+  doc.text(splitLegalNote, marginX, currentY);
+  currentY += (splitLegalNote.length * 4.5) + 12;
+
+  // Signatures
+  const sigY = currentY;
+
+  // Left - First Party
+  doc.setFont('times', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('Pihak Pertama (Pemberi Sewa),', marginX, sigY);
+
+  doc.setFillColor(240, 253, 244);
+  doc.setDrawColor(187, 247, 208);
+  doc.rect(marginX, sigY + 4, 55, 12, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(21, 128, 61);
+  doc.text('SYSTEM DIGITAL VERIFIED', marginX + 3, sigY + 8);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`REG-DATE: ${contract.createdAt || 'RECENT'}`, marginX + 3, sigY + 12);
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('FORSDIG ERP AUTHORIZED', marginX, sigY + 22);
+
+  // Right - Second Party
+  const rightX = pageWidth - marginX - 55;
+  doc.setFont('times', 'bold');
+  doc.setFontSize(10.5);
+  doc.text('Pihak Kedua (Penyewa),', rightX, sigY);
+
+  if (contract.signatureDrawBase64) {
+    try {
+      // Freehand signature drawing on the left side of the block
+      doc.addImage(contract.signatureDrawBase64, 'PNG', rightX - 4, sigY + 2, 34, 13);
+      
+      // QR verification barcode on the right side of the block
+      if (contract.signatureQrBase64) {
+        doc.addImage(contract.signatureQrBase64, 'PNG', rightX + 34, sigY + 1, 17, 17);
+      }
+      
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(5.8);
+      doc.setTextColor(30, 58, 138);
+      doc.text(`E-SIGNATURE CERTIFIED SECURE`, rightX - 4, sigY + 17);
+      doc.text(`DATE: ${contract.signedAt || 'ONLINE'}`, rightX - 4, sigY + 20);
+    } catch (e) {
+      console.error('Error rendering image in PDF:', e);
+    }
+  } else {
+    doc.setFont('times', 'italic');
+    doc.setFontSize(9);
+    doc.setTextColor(217, 119, 6);
+    doc.text('(Belum Ditandatangani)', rightX, sigY + 10);
+  }
+
+  doc.setFont('times', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(contract.customerName.toUpperCase(), rightX - 4, sigY + 24);
+  
+  // Custom corporate position title
+  doc.setFont('times', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text(contract.customerTitle || 'Direktur PT. Foresyndo Global Indonesia', rightX - 4, sigY + 28);
+
+  // Page index
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Halaman 1 dari 1 - Dokumen Perjanjian Sewa Elektronik Sah', pageWidth / 2, pageHeight - 8, { align: 'center' });
+
+  doc.save(`KONTRAK_${contract.contractNumber}_${contract.customerName.replace(/[^a-zA-Z]/g, '_')}.pdf`);
+};
+
+export const angkaKeKata = (nominal: number): string => {
+  const bilangan = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
+  let temp = "";
+  const n = Math.floor(nominal);
+  if (n < 12) {
+    temp = bilangan[n] || "";
+  } else if (n < 20) {
+    temp = (bilangan[n - 10] || "") + " Belas";
+  } else if (n < 100) {
+    temp = (bilangan[Math.floor(n / 10)] || "") + " Puluh " + (bilangan[n % 10] || "");
+  } else if (n < 200) {
+    temp = "Seratus " + angkaKeKata(n - 100);
+  } else if (n < 1000) {
+    temp = (bilangan[Math.floor(n / 100)] || "") + " Ratus " + angkaKeKata(n % 100);
+  } else if (n < 2000) {
+    temp = "Seribu " + angkaKeKata(n - 1000);
+  } else if (n < 1000000) {
+    temp = angkaKeKata(Math.floor(n / 1000)) + " Ribu " + angkaKeKata(n % 1000);
+  } else if (n < 1000000000) {
+    temp = angkaKeKata(Math.floor(n / 1000000)) + " Juta " + angkaKeKata(n % 1000000);
+  } else if (n < 1000000000000) {
+    temp = angkaKeKata(Math.floor(n / 1000000000)) + " Milyar " + angkaKeKata(n % 1000000000);
+  }
+  return temp.trim().replace(/\s+/g, ' ');
 };

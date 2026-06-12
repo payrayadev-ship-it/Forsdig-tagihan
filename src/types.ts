@@ -6,6 +6,7 @@ export interface UserProfile {
   name: string;
   role: UserRole;
   status: 'Aktif' | 'Nonaktif';
+  commissionRate?: number;
 }
 
 export interface Customer {
@@ -210,4 +211,32 @@ export interface RentContract {
   status: ContractStatus;
   createdAt: string;
   updatedAt: string;
+  customerTitle?: string;
+  signatureQrBase64?: string;
 }
+
+export type PayoutStatus = 'Diajukan' | 'Diproses' | 'Selesai' | 'Ditolak';
+
+export interface CommissionPayout {
+  id: string;
+  payoutId: string;
+  payoutNumber: string;
+  salesId: string;
+  salesName: string;
+  amount: number;
+  paymentMethod: string;
+  bankAccount?: string;
+  status: PayoutStatus;
+  requestedAt: string;
+  processedAt?: string;
+  notes?: string;
+}
+
+export interface SalesTarget {
+  id: string;
+  salesId: string;
+  salesName: string;
+  month: string; // YYYY-MM
+  targetAmount: number;
+}
+

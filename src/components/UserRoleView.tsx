@@ -7,11 +7,16 @@ export const UserRoleView: React.FC = () => {
   
   const [selectedUserId, setSelectedUserId] = useState('');
   const [newRole, setNewRole] = useState<'Super Admin' | 'Admin Keuangan' | 'Staff' | 'Viewer' | 'Sales'>('Viewer');
+  const [newCommissionRate, setNewCommissionRate] = useState<number | ''>(5);
 
   const handleRoleChangeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUserId) return;
-    updateLocalUserRole(selectedUserId, newRole);
+    updateLocalUserRole(
+      selectedUserId, 
+      newRole, 
+      newRole === 'Sales' ? (newCommissionRate === '' ? 5 : Number(newCommissionRate)) : undefined
+    );
     setSelectedUserId('');
   };
 
@@ -43,6 +48,11 @@ export const UserRoleView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center space-x-2">
+                  {u.role === 'Sales' && (
+                    <span className="text-[10px] text-slate-500 font-extrabold mr-1 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full">
+                      Komisi: {u.commissionRate !== undefined ? `${u.commissionRate}%` : '5% (Default)'}
+                    </span>
+                  )}
                   <span className={`px-2.5 py-0.5 text-[9px] font-extrabold rounded-full ${
                     u.role === 'Super Admin'
                       ? 'bg-red-50 text-red-600 border border-red-105'
@@ -61,6 +71,7 @@ export const UserRoleView: React.FC = () => {
                       onClick={() => {
                         setSelectedUserId(u.id);
                         setNewRole(u.role);
+                        setNewCommissionRate(u.commissionRate !== undefined ? u.commissionRate : 5);
                       }}
                       className="px-2 py-1 hover:bg-slate-200 border border-slate-200 rounded text-[10px] font-bold text-slate-600 cursor-pointer"
                       id={`edit-role-btn-${u.id}`}
@@ -130,7 +141,26 @@ export const UserRoleView: React.FC = () => {
                 </select>
               </div>
 
-              <div className="flex items-center justify-end space-x-1.5">
+              {newRole === 'Sales' && (
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Persentase Komisi (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    required
+                    value={newCommissionRate}
+                    onChange={(e) => setNewCommissionRate(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="w-full border border-slate-200 p-2 text-xs rounded-lg bg-white outline-none focus:border-red-500"
+                    id="form-user-commission-rate"
+                    placeholder="Contoh: 5"
+                  />
+                  <p className="text-[10px] text-slate-400 font-semibold mt-1">Ditetapkan khusus sebagai dasar penghitungan komisi sales ini.</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-1.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setSelectedUserId('')}
