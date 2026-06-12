@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useBilling } from '../context/BillingContext';
 import { 
-  Plus, Edit, Trash, Search, Filter, Download, Upload, Printer, X, Check, AlertCircle 
+  Plus, Edit, Trash, Search, Filter, Download, Upload, Printer, X, Check, AlertCircle, Eye, User
 } from 'lucide-react';
 import { Customer } from '../types';
 import * as XLSX from 'xlsx';
@@ -15,6 +15,7 @@ export const CustomerView: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
 
   // Form States
   const [name, setName] = useState('');
@@ -25,8 +26,34 @@ export const CustomerView: React.FC = () => {
   const [city, setCity] = useState('');
   const [province, setProvince] = useState('');
   const [npwp, setNpwp] = useState('');
+  const [nik, setNik] = useState('');
+  const [gender, setGender] = useState<'Laki-laki' | 'Perempuan'>('Laki-laki');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [ktpUrl, setKtpUrl] = useState('');
   const [status, setStatus] = useState<Customer['status']>('Aktif');
   const [notes, setNotes] = useState('');
+
+  // Handle image conversion to base64
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'photo' | 'ktp') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Ukuran berkas terlalu besar! Batas maksimal adalah 2MB agar muat dalam database.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const resultString = evt.target?.result as string;
+      if (type === 'photo') {
+        setPhotoUrl(resultString);
+      } else {
+        setKtpUrl(resultString);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Open Add Form
   const openAddDrawer = () => {
@@ -39,6 +66,10 @@ export const CustomerView: React.FC = () => {
     setCity('');
     setProvince('');
     setNpwp('');
+    setNik('');
+    setGender('Laki-laki');
+    setPhotoUrl('');
+    setKtpUrl('');
     setStatus('Aktif');
     setNotes('');
     setDrawerOpen(true);
@@ -55,6 +86,10 @@ export const CustomerView: React.FC = () => {
     setCity(cust.city);
     setProvince(cust.province);
     setNpwp(cust.npwp);
+    setNik(cust.nik || '');
+    setGender(cust.gender || 'Laki-laki');
+    setPhotoUrl(cust.photoUrl || '');
+    setKtpUrl(cust.ktpUrl || '');
     setStatus(cust.status);
     setNotes(cust.notes);
     setDrawerOpen(true);
@@ -74,6 +109,10 @@ export const CustomerView: React.FC = () => {
       city,
       province,
       npwp,
+      nik,
+      gender,
+      photoUrl,
+      ktpUrl,
       status,
       notes
     };
@@ -141,6 +180,10 @@ export const CustomerView: React.FC = () => {
             city: row['Kota'] || row['City'] || row['city'] || '',
             province: row['Provinsi'] || row['Province'] || row['province'] || '',
             npwp: row['NPWP'] || row['npwp'] || '',
+            nik: String(row['NIK'] || row['nik'] || ''),
+            gender: row['Jenis Kelamin'] === 'Perempuan' || row['gender'] === 'Perempuan' ? 'Perempuan' : 'Laki-laki',
+            photoUrl: row['Photo URL'] || row['photoUrl'] || '',
+            ktpUrl: row['KTP URL'] || row['ktpUrl'] || '',
             status: row['Status'] === 'Nonaktif' ? 'Nonaktif' : 'Aktif',
             notes: row['Catatan'] || row['Notes'] || 'Diimport otomatis lewat berkas Excel.'
           });
@@ -161,10 +204,12 @@ export const CustomerView: React.FC = () => {
       'Perusahaan': c.company,
       'Email': c.email,
       'No Telepon': c.phone,
+      'NIK': c.nik || '',
+      'Jenis Kelamin': c.gender || 'Laki-laki',
       'Alamat Kantor': c.address,
       'Kabupaten/Kota': c.city,
       'Provinsi': c.province,
-      'NPWP': c.npwp,
+      'NPWP': c.npwp || '',
       'Status': c.status,
       'Catatan Tagihan': c.notes,
       'Joined At': c.createdAt
@@ -309,10 +354,39 @@ export const CustomerView: React.FC = () => {
                 </tr>
               ) : (
                 filteredCustomers.map(cust => (
-                  <tr key={cust.id} className="hover:bg-slate-50/50 transition">
+                  <tr key={cust.id} className="hover:bg-slate-50/55 transition border-b border-slate-100">
                     <td className="px-6 py-4">
-                      <div className="font-bold text-slate-900">{cust.name}</div>
-                      <div className="text-[10px] font-mono font-bold text-red-650 mt-0.5">{cust.customerId}</div>
+                      <div className="flex items-center space-x-3">
+                        {cust.photoUrl ? (
+                          <img 
+                            src={cust.photoUrl} 
+                            alt={cust.name} 
+                            className="w-9 h-9 rounded-full object-cover border border-slate-200 shadow-sm"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 text-slate-400">
+                            <User size={16} />
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>{cust.name}</span>
+                            {cust.gender && (
+                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                                cust.gender === 'Laki-laki' 
+                                  ? 'bg-blue-50 text-blue-600 border border-blue-100' 
+                                  : 'bg-pink-50 text-pink-600 border border-pink-100'
+                              }`}>
+                                {cust.gender === 'Laki-laki' ? 'L' : 'P'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] font-mono font-bold text-red-650 mt-0.5 flex items-center gap-2">
+                            <span>{cust.customerId}</span>
+                            {cust.nik && <span className="text-slate-400 font-normal">NIK: {cust.nik}</span>}
+                          </div>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 font-semibold text-slate-700">{cust.company}</td>
                     <td className="px-6 py-4">
@@ -332,28 +406,38 @@ export const CustomerView: React.FC = () => {
                         {cust.status}
                       </span>
                     </td>
-                    {!isReadOnly && (
-                      <td className="px-6 py-4 text-right no-print">
-                        <div className="flex items-center justify-end space-x-1.5">
-                          <button 
-                            onClick={() => openEditDrawer(cust)}
-                            className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-slate-100 cursor-pointer"
-                            title="Edit"
-                            id={`edit-cust-btn-${cust.id}`}
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button 
-                            onClick={() => setDeleteId(cust.id)}
-                            className="p-1 text-slate-400 hover:text-slate-800 rounded hover:bg-slate-100 cursor-pointer"
-                            title="Delete"
-                            id={`delete-cust-btn-${cust.id}`}
-                          >
-                            <Trash size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                    <td className="px-6 py-4 text-right no-print">
+                      <div className="flex items-center justify-end space-x-1.5">
+                        <button 
+                          onClick={() => setViewingCustomer(cust)}
+                          className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-slate-100 cursor-pointer"
+                          title="Lihat Detail Profil & Dokumen"
+                          id={`view-cust-btn-${cust.id}`}
+                        >
+                          <Eye size={14} />
+                        </button>
+                        {!isReadOnly && (
+                          <>
+                            <button 
+                              onClick={() => openEditDrawer(cust)}
+                              className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-slate-100 cursor-pointer"
+                              title="Edit"
+                              id={`edit-cust-btn-${cust.id}`}
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button 
+                              onClick={() => setDeleteId(cust.id)}
+                              className="p-1 text-slate-400 hover:text-slate-800 rounded hover:bg-slate-100 cursor-pointer"
+                              title="Delete"
+                              id={`delete-cust-btn-${cust.id}`}
+                            >
+                              <Trash size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -474,6 +558,94 @@ export const CustomerView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nomor NIK *</label>
+                  <input 
+                    type="text"
+                    required
+                    maxLength={16}
+                    placeholder="16-digit nomor NIK"
+                    value={nik}
+                    onChange={(e) => setNik(e.target.value.replace(/[^0-9]/g, ''))}
+                    className="w-full border border-slate-200 outline-none p-2.5 text-sm rounded-xl focus:border-red-500 font-mono"
+                    id="form-customer-nik"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Jenis Kelamin</label>
+                  <select 
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value as any)}
+                    className="w-full border border-slate-200 outline-none p-2.5 text-sm rounded-xl focus:border-red-500 cursor-pointer bg-white"
+                    id="form-customer-gender"
+                  >
+                    <option value="Laki-laki">Laki-laki</option>
+                    <option value="Perempuan">Perempuan</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">Foto Pelanggan</label>
+                  {photoUrl ? (
+                    <div className="relative group">
+                      <img src={photoUrl} alt="Foto Pelanggan" className="w-full h-32 object-cover rounded-lg border border-slate-200 shadow-inner" />
+                      <button
+                        type="button"
+                        onClick={() => setPhotoUrl('')}
+                        className="absolute top-1.5 right-1.5 bg-red-650 hover:bg-red-700 text-white rounded-full p-1 opacity-90 transition shadow cursor-pointer"
+                        title="Hapus foto"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center border border-dashed border-slate-300 rounded-lg p-4 h-32 bg-white text-center cursor-pointer relative hover:bg-slate-50 transition">
+                      <Upload size={20} className="text-slate-400 mb-2" />
+                      <span className="text-[10px] text-slate-500 font-bold">Pilih Foto</span>
+                      <span className="text-[9px] text-slate-400">JPG/PNG (Maks 2MB)</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="absolute inset-0 opacity-0 cursor-pointer" 
+                        onChange={(e) => handleFileChange(e, 'photo')} 
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">KTP Pelanggan</label>
+                  {ktpUrl ? (
+                    <div className="relative group">
+                      <img src={ktpUrl} alt="KTP Pelanggan" className="w-full h-32 object-cover rounded-lg border border-slate-200 shadow-inner" />
+                      <button
+                        type="button"
+                        onClick={() => setKtpUrl('')}
+                        className="absolute top-1.5 right-1.5 bg-red-650 hover:bg-red-700 text-white rounded-full p-1 opacity-90 transition shadow cursor-pointer"
+                        title="Hapus KTP"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center border border-dashed border-slate-300 rounded-lg p-4 h-32 bg-white text-center cursor-pointer relative hover:bg-slate-50 transition">
+                      <Upload size={20} className="text-slate-400 mb-2" />
+                      <span className="text-[10px] text-slate-500 font-bold">Pilih KTP</span>
+                      <span className="text-[9px] text-slate-400">JPG/PNG (Maks 2MB)</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="absolute inset-0 opacity-0 cursor-pointer" 
+                        onChange={(e) => handleFileChange(e, 'ktp')} 
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">NPWP Perusahaan</label>
                   <input 
                     type="text"
@@ -559,6 +731,138 @@ export const CustomerView: React.FC = () => {
                 id="confirm-delete-cust"
               >
                 Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Viewing Customer profile details & document modal card */}
+      {viewingCustomer && (
+        <div className="fixed inset-0 z-55 flex items-center justify-center bg-black/50 p-4 overflow-y-auto" id="customer-profile-viewer-modal">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-scale-up text-left">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-base text-slate-900">Dossier Detail Pelanggan</h3>
+                <p className="text-xs text-slate-400 mt-0.5 font-semibold">ID Registrasi Resmi: <span className="font-mono text-red-650 font-bold">{viewingCustomer.customerId}</span></p>
+              </div>
+              <button 
+                onClick={() => setViewingCustomer(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 bg-slate-100 hover:bg-slate-200 rounded-full transition cursor-pointer"
+                id="close-cust-viewer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-700">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
+                {viewingCustomer.photoUrl ? (
+                  <img 
+                    src={viewingCustomer.photoUrl} 
+                    alt={viewingCustomer.name} 
+                    className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-200 shadow-md flex-shrink-0" 
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center border-2 border-slate-200 text-slate-400 flex-shrink-0">
+                    <User size={32} />
+                  </div>
+                )}
+                <div>
+                  <h4 className="text-lg font-extrabold text-slate-900">{viewingCustomer.name}</h4>
+                  <p className="text-xs font-semibold text-slate-500 mt-0.5">{viewingCustomer.company || 'Pribadi / Perorangan'}</p>
+                  
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span className={`px-2.5 py-0.5 text-xs font-extrabold rounded-full ${
+                      viewingCustomer.status === 'Aktif' 
+                        ? 'bg-emerald-100 text-emerald-850' 
+                        : 'bg-slate-100 text-slate-650'
+                    }`}>
+                      {viewingCustomer.status}
+                    </span>
+                    {viewingCustomer.gender && (
+                      <span className="px-2.5 py-0.5 text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-150 rounded-full">
+                        {viewingCustomer.gender}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Data parameters Grid layout */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium">
+                <div>
+                  <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Nomor NIK</span>
+                  <span className="text-slate-800 font-mono text-xs font-bold bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 block">
+                    {viewingCustomer.nik || 'Tidak ditentukan'}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">NPWP Surat Pajak</span>
+                  <span className="text-slate-800 font-mono text-xs font-bold bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 block">
+                    {viewingCustomer.npwp || 'Tidak ditentukan'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Email Penagihan</span>
+                  <span className="text-slate-800 block text-xs break-all bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-mono">
+                    {viewingCustomer.email}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Nomor Telepon</span>
+                  <span className="text-slate-800 block text-xs bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-mono">
+                    {viewingCustomer.phone || '-'}
+                  </span>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Alamat Kantor / Rumah</span>
+                  <span className="text-slate-800 block text-xs bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 leading-relaxed">
+                    {viewingCustomer.address || '-'} {viewingCustomer.city && `, ${viewingCustomer.city}`} {viewingCustomer.province && `, ${viewingCustomer.province}`}
+                  </span>
+                </div>
+
+                {viewingCustomer.notes && (
+                  <div className="sm:col-span-2 p-3 bg-red-50/20 rounded-xl border border-red-100 text-xs">
+                    <span className="block text-[10px] uppercase font-bold text-red-650 tracking-wider mb-0.5">Catatan Internal Administrasi</span>
+                    <p className="text-slate-700 italic">"{viewingCustomer.notes}"</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Verified Uploaded ID Card slot elements */}
+              <div className="pt-4 border-t border-slate-100">
+                <span className="block text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-2">Dokumen legalitas KTP</span>
+                {viewingCustomer.ktpUrl ? (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 p-2 shadow-inner">
+                    <img 
+                      src={viewingCustomer.ktpUrl} 
+                      alt="Kartu KTP Pelanggan" 
+                      className="w-full h-auto max-h-64 object-contain rounded-lg mx-auto" 
+                    />
+                    <div className="text-center text-[10px] text-slate-400 py-1 font-semibold">
+                      KTP terverifikasi secara elektronik oleh sistem penagihan
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-slate-250 rounded-xl p-6 text-center text-slate-400 text-xs bg-slate-50/30 font-semibold">
+                    Klien belum melampirkan berkas KTP.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer actions */}
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
+              <button 
+                onClick={() => setViewingCustomer(null)}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black shadow transition cursor-pointer"
+              >
+                Tutup dossier
               </button>
             </div>
           </div>

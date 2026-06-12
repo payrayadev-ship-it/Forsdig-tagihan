@@ -20,6 +20,10 @@ export interface Customer {
   phone: string;
   email: string;
   npwp: string;
+  nik?: string;
+  gender?: 'Laki-laki' | 'Perempuan';
+  photoUrl?: string;
+  ktpUrl?: string;
   status: 'Aktif' | 'Nonaktif';
   notes: string;
   createdAt: string;
