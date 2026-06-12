@@ -1290,11 +1290,14 @@ export const generateRentalApplicationPDF = (
     customerCompany?: string;
     propertyName: string;
     proposalDuration: string;
+    rentPeriodOption?: 'Harian' | 'Mingguan' | 'Bulanan';
     proposedPrice: number;
     purpose: string;
     notes?: string;
     createdAt: string;
     status: 'Menunggu Review' | 'Diterima' | 'Ditolak';
+    customerSignatureBase64?: string;
+    customerSignatureQrBase64?: string;
   },
   settings: SystemSetting | null
 ) => {
@@ -1381,10 +1384,11 @@ export const generateRentalApplicationPDF = (
   doc.setFont('times', 'bold');
   doc.text('II. RINCIAN STRUKTUR BARANG & PROPOSAL SEWA', marginX + 4, currentY + 28);
   doc.setFont('times', 'normal');
-  doc.text(`   Nama Objek/Barang   : ${app.propertyName}`, marginX + 6, currentY + 34);
-  doc.text(`   Durasi yang Diajukan : ${app.proposalDuration}`, marginX + 6, currentY + 38.5);
-  doc.text(`   Rencana Harga Sewa   : Rp ${(app.proposedPrice || 0).toLocaleString('id-ID')}`, marginX + 6, currentY + 43);
-  doc.text(`   Tujuan Keperluan    : ${app.purpose}`, marginX + 6, currentY + 47.5);
+  doc.text(`   Nama Objek/Barang   : ${app.propertyName}`, marginX + 6, currentY + 33);
+  doc.text(`   Pilihan Opsi Sewa   : Sewa ${app.rentPeriodOption || 'Bulanan'} (Per ${app.rentPeriodOption === 'Harian' ? 'Hari' : app.rentPeriodOption === 'Mingguan' ? 'Minggu' : 'Bulan'})`, marginX + 6, currentY + 37);
+  doc.text(`   Durasi yang Diajukan : ${app.proposalDuration}`, marginX + 6, currentY + 41);
+  doc.text(`   Rencana Harga Sewa   : Rp ${(app.proposedPrice || 0).toLocaleString('id-ID')}`, marginX + 6, currentY + 45);
+  doc.text(`   Tujuan Keperluan    : ${app.purpose}`, marginX + 6, currentY + 49);
 
   currentY += 60;
 
@@ -1414,15 +1418,36 @@ export const generateRentalApplicationPDF = (
   doc.setFont('times', 'bold');
   doc.text('Hormat Kami (Pengaju/Penyewa),', marginX, sigY);
   
-  // Custom subtle grey digital verification watermark for customer side
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(241, 245, 249);
-  doc.rect(marginX, sigY + 2, 45, 12, 'FD');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(100, 116, 139);
-  doc.text('E-SUBMITTED BY CUSTOMER', marginX + 3, sigY + 7);
-  doc.text(`DATE: ${app.createdAt}`, marginX + 3, sigY + 11);
+  if (app.customerSignatureBase64) {
+    try {
+      // Draw signature and E-Stamp side-by-side precisely as requested
+      doc.addImage(app.customerSignatureBase64, 'PNG', marginX, sigY + 2, 22, 11);
+      if (app.customerSignatureQrBase64) {
+        doc.addImage(app.customerSignatureQrBase64, 'PNG', marginX + 24, sigY + 1.5, 12, 12);
+      }
+    } catch (err) {
+      console.error('Error drawing customer touch signature base64 in pdf:', err);
+      // Fallback
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(241, 245, 249);
+      doc.rect(marginX, sigY + 2, 45, 12, 'FD');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text('E-SIGNED ELECTRONICALLY', marginX + 3, sigY + 7);
+      doc.text(`DATE: ${app.createdAt}`, marginX + 3, sigY + 11);
+    }
+  } else {
+    // Custom subtle grey digital verification watermark for customer side (unsigned)
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(241, 245, 249);
+    doc.rect(marginX, sigY + 2, 45, 12, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('E-SUBMITTED BY CUSTOMER', marginX + 3, sigY + 7);
+    doc.text(`DATE: ${app.createdAt}`, marginX + 3, sigY + 11);
+  }
 
   doc.setFont('times', 'bold');
   doc.setFontSize(9.5);

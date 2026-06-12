@@ -116,12 +116,15 @@ export interface RentApplication {
   customerCompany?: string;
   propertyName: string;
   proposalDuration: string;
+  rentPeriodOption: 'Harian' | 'Mingguan' | 'Bulanan';
   headingTo: string;
   proposedPrice: number;
   purpose: string;
   notes?: string;
   createdAt: string;
   status: 'Menunggu Review' | 'Diterima' | 'Ditolak';
+  customerSignatureBase64?: string;
+  customerSignatureQrBase64?: string;
 }
 
 export const RentContractView: React.FC = () => {
@@ -156,6 +159,7 @@ export const RentContractView: React.FC = () => {
         customerCompany: 'CV. Sentosa Jaya',
         propertyName: 'Server Supermicro Rackmount 2U Intel Xeon Scalable',
         proposalDuration: '12 Bulan',
+        rentPeriodOption: 'Bulanan',
         headingTo: 'PT. Foresyndo Global Indonesia',
         proposedPrice: 15600000,
         purpose: 'Infrastruktur database ERP & backup mirroring produksi internal',
@@ -175,6 +179,7 @@ export const RentContractView: React.FC = () => {
         propertyName: 'Mesin Fotokopi Kyocera Multifungsi A3 TaskAlfa',
         headingTo: 'PT. Foresyndo Global Indonesia',
         proposalDuration: '6 Bulan',
+        rentPeriodOption: 'Bulanan',
         proposedPrice: 8500000,
         purpose: 'Operasional harian & penggandaan berkas dokumen legal kantor cabang',
         notes: 'Harap diservis dan diganti tinta berkala setiap bulan oleh teknisi PT. FGI.',
@@ -192,6 +197,7 @@ export const RentContractView: React.FC = () => {
   const [selectedAppCustomer, setSelectedAppCustomer] = useState<Customer | null>(null);
   const [appPropertyName, setAppPropertyName] = useState('');
   const [appDuration, setAppDuration] = useState('12 Bulan');
+  const [appRentPeriodOption, setAppRentPeriodOption] = useState<'Harian' | 'Mingguan' | 'Bulanan'>('Bulanan');
   const [appPrice, setAppPrice] = useState('');
   const [appPurpose, setAppPurpose] = useState('');
   const [appNotes, setAppNotes] = useState('');
@@ -222,6 +228,84 @@ export const RentContractView: React.FC = () => {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [signerName, setSignerName] = useState('');
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
+
+  // Rent Application Signature Canvas
+  const appCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [appIsDrawing, setAppIsDrawing] = useState(false);
+  const [appHasDrawn, setAppHasDrawn] = useState(false);
+  const [appSignatureBase64, setAppSignatureBase64] = useState<string>('');
+
+  const startAppDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    // Prevent scrolling when drawing on touchscreen
+    if (e.cancelable) e.preventDefault();
+    const canvas = appCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.strokeStyle = '#1E3A8A'; // Blue deep coordinates
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+
+    if ('touches' in e) {
+      if (e.touches.length === 0) return;
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    setAppIsDrawing(true);
+  };
+
+  const drawApp = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.cancelable) e.preventDefault();
+    if (!appIsDrawing) return;
+    const canvas = appCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+
+    if ('touches' in e) {
+      if (e.touches.length === 0) return;
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.stroke();
+    setAppHasDrawn(true);
+  };
+
+  const stopAppDrawing = () => {
+    setAppIsDrawing(false);
+    if (appCanvasRef.current && appHasDrawn) {
+      setAppSignatureBase64(appCanvasRef.current.toDataURL('image/png'));
+    }
+  };
+
+  const clearAppCanvas = () => {
+    const canvas = appCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setAppHasDrawn(false);
+    setAppSignatureBase64('');
+  };
 
   // Delivery state
   const [deliveryStatus, setDeliveryStatus] = useState<{ email?: 'idle' | 'sending' | 'success'; wa?: 'idle' | 'sending' | 'success' }>({});
@@ -290,6 +374,9 @@ export const RentContractView: React.FC = () => {
     const applicationNumber = `REQ/${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}/${String(nextNum).padStart(4, '0')}`;
     const timestamp = new Date().toISOString().split('T')[0];
 
+    const sigBase64 = appSignatureBase64 || undefined;
+    const sigQrBase64 = sigBase64 ? generateSecureQrStamp(applicationNumber, selectedAppCustomer.name, 'Calon Penyewa', timestamp) : undefined;
+
     const newApp: RentApplication = {
       id,
       applicationId: id,
@@ -301,12 +388,15 @@ export const RentContractView: React.FC = () => {
       customerCompany: selectedAppCustomer.company || 'Pribadi / Perorangan',
       propertyName: appPropertyName,
       proposalDuration: appDuration,
+      rentPeriodOption: appRentPeriodOption,
       headingTo: 'PT. Foresyndo Global Indonesia',
       proposedPrice: parseFloat(appPrice) || 0,
       purpose: appPurpose || 'Kebutuhan operasional bisnis kantor',
       notes: appNotes,
       createdAt: timestamp,
-      status: 'Menunggu Review'
+      status: 'Menunggu Review',
+      customerSignatureBase64: sigBase64,
+      customerSignatureQrBase64: sigQrBase64
     };
 
     setApplications(prev => [newApp, ...prev]);
@@ -317,6 +407,8 @@ export const RentContractView: React.FC = () => {
     setAppPrice('');
     setAppPurpose('');
     setAppNotes('');
+    setAppRentPeriodOption('Bulanan');
+    clearAppCanvas();
 
     logActivity(`Membuat Surat Pengajuan Sewa ${applicationNumber} dari pelanggan ${selectedAppCustomer.name}`, 'Kontrak Sewa');
     addNotification('Surat Pengajuan Sewa Diunggah', `Dokumen pengajuan sewa ${applicationNumber} berhasil tersimpan ke sistem.`, 'success');
@@ -1256,6 +1348,20 @@ export const RentContractView: React.FC = () => {
                   </div>
 
                   <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Pilihan Basis Waktu Sewa (Opsi Sewa) *</label>
+                    <select
+                      value={appRentPeriodOption}
+                      onChange={(e) => setAppRentPeriodOption(e.target.value as any)}
+                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white cursor-pointer"
+                      id="form-app-rent-period"
+                    >
+                      <option value="Harian">Sewa Perhari (Harian)</option>
+                      <option value="Mingguan">Sewa Perminggu (Mingguan)</option>
+                      <option value="Bulanan">Sewa Perbulan (Bulanan)</option>
+                    </select>
+                  </div>
+
+                  <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Rencana Nominal Anggaran Sewa (Rp)</label>
                     <input
                       type="number"
@@ -1280,12 +1386,57 @@ export const RentContractView: React.FC = () => {
                   <div className="col-span-1 md:col-span-2">
                     <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Rincian / Keterangan Kebutuhan Khusus</label>
                     <textarea
-                      rows={3}
+                      rows={2}
                       placeholder="Sebutkan catatan instalasi OS, bandwidth khusus, perawatan rutin, atau detail lainnya..."
                       value={appNotes}
                       onChange={(e) => setAppNotes(e.target.value)}
                       className="w-full border border-slate-200 p-3 text-xs font-semibold rounded-xl focus:border-[#D32F2F] outline-none bg-white text-slate-700"
                     />
+                  </div>
+
+                  {/* Touch Signature Pad inside Application Form view */}
+                  <div className="col-span-1 md:col-span-2 bg-slate-50 border border-slate-150 rounded-xl p-4">
+                    <label className="block text-[10px] font-black text-slate-700 uppercase mb-1">
+                      Touch Signature Pad (Coretan Tanda Tangan Calon Penyewa)
+                    </label>
+                    <p className="text-[10px] text-slate-400 mb-2.5 font-semibold leading-normal">
+                      Gunakan touch screen / layar sentuh handphone, tablet, atau mouse Anda untuk memberikan specimen tanda tangan elektronik yang terenkripsi resmi ke berkas pengajuan ini.
+                    </p>
+
+                    <div className="border border-slate-250 bg-white rounded-xl p-1 relative">
+                      <canvas
+                        ref={appCanvasRef}
+                        width={600}
+                        height={140}
+                        onMouseDown={startAppDrawing}
+                        onMouseMove={drawApp}
+                        onMouseUp={stopAppDrawing}
+                        onMouseLeave={stopAppDrawing}
+                        onTouchStart={startAppDrawing}
+                        onTouchMove={drawApp}
+                        onTouchEnd={stopAppDrawing}
+                        className="w-full bg-white rounded-lg cursor-crosshair h-28 block touch-none"
+                        id="touch-signature-app-canvas"
+                      />
+                      {!appHasDrawn && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          Gambar Tanda Tangan Anda Disini
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-[9px] text-slate-400 font-bold italic">
+                        {appHasDrawn ? '✓ Tanda tangan tersimpan secara lokal' : '⚠ Tanda tangan tanda belum ditarik'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={clearAppCanvas}
+                        className="p-1 px-3 bg-white text-slate-500 hover:text-red-650 rounded-lg text-[10px] font-bold border border-slate-200 shadow-sm cursor-pointer hover:bg-slate-50"
+                      >
+                        Hapus Coreta Tanda Tangan
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1371,6 +1522,9 @@ export const RentContractView: React.FC = () => {
                         <span className="text-slate-400 font-bold col-span-1">Objek / Barang</span>
                         <span className="col-span-2 font-black text-slate-900">: {selectedApplication.propertyName}</span>
                         
+                        <span className="text-slate-400 font-bold col-span-1">Pilihan Sewa</span>
+                        <span className="col-span-2 font-black text-[#D32F2F]">: Sewa {selectedApplication.rentPeriodOption || 'Bulanan'} (Per {selectedApplication.rentPeriodOption === 'Harian' ? 'Hari' : selectedApplication.rentPeriodOption === 'Mingguan' ? 'Minggu' : 'Bulan'})</span>
+
                         <span className="text-slate-400 font-bold col-span-1">Durasi Rencana</span>
                         <span className="col-span-2 font-bold text-slate-800">: {selectedApplication.proposalDuration}</span>
                         
@@ -1398,9 +1552,32 @@ export const RentContractView: React.FC = () => {
                       <div>
                         <p className="text-[9px] text-slate-400 font-bold uppercase">Pihak Pengaju (Penyewa),</p>
                         <div className="h-16 flex flex-col justify-center my-1.5">
-                          <span className="font-mono text-[7px] border border-slate-200 text-slate-450 px-2 py-1 select-none text-center rounded bg-slate-50 font-bold uppercase tracking-wider">
-                            E-SUBMITTED SYSTEM OK
-                          </span>
+                          {selectedApplication.customerSignatureBase64 ? (
+                            <div className="flex items-center gap-2" id="paper-app-signature-sides">
+                              {/* Touch signature pad drawing */}
+                              <div className="border border-slate-200 bg-white p-0.5 rounded-lg shadow-sm" title="Touch Signature Pad">
+                                <img 
+                                  src={selectedApplication.customerSignatureBase64} 
+                                  alt="Touch Signature" 
+                                  className="h-10 w-20 object-contain"
+                                />
+                              </div>
+                              {/* Digital barcode/QR certificate stamp */}
+                              {selectedApplication.customerSignatureQrBase64 && (
+                                <div className="border border-indigo-200 bg-white p-0.5 rounded-lg shadow-sm" title="Digital Certificate E-Sign">
+                                  <img 
+                                    src={selectedApplication.customerSignatureQrBase64} 
+                                    alt="Barcode E-Sign" 
+                                    className="h-10 w-10 object-contain"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="font-mono text-[7px] border border-slate-200 text-slate-450 px-2 py-1 select-none text-center rounded bg-slate-50 font-bold uppercase tracking-wider">
+                              E-SUBMITTED SYSTEM OK
+                            </span>
+                          )}
                         </div>
                         <p className="font-bold text-xs text-slate-700">{selectedApplication.customerName}</p>
                         <p className="text-[8px] text-slate-400 font-semibold">{selectedApplication.customerCompany || 'Penyewa Perorangan'}</p>
