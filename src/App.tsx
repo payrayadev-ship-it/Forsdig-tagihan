@@ -14,6 +14,7 @@ import { SalesCommissionView } from './components/SalesCommissionView';
 import { UserRoleView } from './components/UserRoleView';
 import { SettingView } from './components/SettingView';
 import { RentContractView } from './components/RentContractView';
+import { RentalInventoryView } from './components/RentalInventoryView';
 import { 
   Bell, Check, Shield, Lock, Mail, UserCheck, ChevronRight, X, AlertCircle, Database, Globe,
   LayoutDashboard, Users, ShoppingBag, Receipt, CreditCard, AlertTriangle, ArrowDownCircle, 
@@ -152,6 +153,8 @@ function AppContent() {
         return <UserRoleView />;
       case 'sewa':
         return <RentContractView />;
+      case 'inventaris-sewa':
+        return <RentalInventoryView />;
       case 'pengaturan':
         return <SettingView />;
       default:

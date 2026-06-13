@@ -244,3 +244,22 @@ export interface SalesTarget {
   targetAmount: number;
 }
 
+export type RentalInventoryStatus = 'Tersedia' | 'Disewa' | 'Maintenance';
+
+export interface RentalInventoryItem {
+  id: string;
+  itemId: string;
+  serialNumber: string;
+  name: string;
+  status: RentalInventoryStatus;
+  notes?: string;
+  customerName?: string;
+  associatedContractId?: string;
+  associatedContractNumber?: string;
+  rentedAt?: string;
+  autoReturnDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+

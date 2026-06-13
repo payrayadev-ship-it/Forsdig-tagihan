@@ -7,11 +7,11 @@ import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signI
 import { 
   Customer, Product, ProductCategory, Invoice, Payment, Expense, CashAccount, 
   SystemNotification, ActivityLog, SystemSetting, Receivable, UserProfile, UserRole, RentContract,
-  CommissionPayout, SalesTarget, PayoutStatus
+  CommissionPayout, SalesTarget, PayoutStatus, RentalInventoryItem, RentalInventoryStatus
 } from '../types';
 import { 
   DUMMY_CUSTOMERS, DUMMY_PRODUCTS, DUMMY_INVOICES, DUMMY_PAYMENTS, 
-  DUMMY_EXPENSES, DUMMY_CASH_ACCOUNTS, DUMMY_SETTING, DUMMY_RECEIVABLES 
+  DUMMY_EXPENSES, DUMMY_CASH_ACCOUNTS, DUMMY_SETTING, DUMMY_RECEIVABLES, DUMMY_RENTAL_INVENTORY
 } from '../utils/dummyData';
 import { generateInvoicePDFBase64 } from '../utils/pdfGenerator';
 
@@ -34,6 +34,7 @@ interface BillingContextProps {
   contracts: RentContract[];
   payouts: CommissionPayout[];
   targets: SalesTarget[];
+  rentalInventory: RentalInventoryItem[];
   
   // Auth operations
   login: (email: string, password: string) => Promise<void>;
@@ -91,6 +92,11 @@ interface BillingContextProps {
   addPayoutRequest: (data: Omit<CommissionPayout, 'id' | 'payoutId' | 'payoutNumber' | 'status' | 'requestedAt'>) => Promise<CommissionPayout>;
   updatePayoutStatus: (id: string, status: PayoutStatus, notes?: string) => Promise<void>;
   updateSalesTarget: (salesId: string, salesName: string, month: string, targetAmount: number) => Promise<void>;
+
+  // Rental Inventory Actions
+  addRentalInventoryItem: (data: Omit<RentalInventoryItem, 'id' | 'itemId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateRentalInventoryItem: (id: string, data: Partial<RentalInventoryItem>) => Promise<void>;
+  deleteRentalInventoryItem: (id: string) => Promise<void>;
 }
 
 const BillingContext = createContext<BillingContextProps | undefined>(undefined);
@@ -167,6 +173,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [contracts, setContracts] = useState<RentContract[]>([]);
   const [payouts, setPayouts] = useState<CommissionPayout[]>([]);
   const [targets, setTargets] = useState<SalesTarget[]>([]);
+  const [rentalInventory, setRentalInventory] = useState<RentalInventoryItem[]>([]);
 
   // Path resolution helper for absolute data segregation
   const getUserColPath = (col: string) => {
@@ -301,6 +308,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const localContracts = localStorage.getItem('forsdig_contracts');
       const localPayouts = localStorage.getItem('forsdig_payouts');
       const localTargets = localStorage.getItem('forsdig_targets');
+      const localInventory = localStorage.getItem('forsdig_rental_inventory');
 
       setCustomers(localCust ? JSON.parse(localCust) : DUMMY_CUSTOMERS);
       setProducts(localProd ? JSON.parse(localProd) : DUMMY_PRODUCTS);
@@ -317,6 +325,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setContracts(localContracts ? JSON.parse(localContracts) : []);
       setPayouts(localPayouts ? JSON.parse(localPayouts) : []);
       setTargets(localTargets ? JSON.parse(localTargets) : []);
+      setRentalInventory(localInventory ? JSON.parse(localInventory) : DUMMY_RENTAL_INVENTORY);
     } else {
       // Wait for complete authenticated user profile initialization before loading subcollections
       if (!currentUser?.userId) return;
@@ -377,6 +386,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setTargets(snap.docs.map(d => ({ id: d.id, ...d.data() } as SalesTarget)));
         }, err => handleFirestoreError(err, OperationType.LIST, 'targets')),
 
+        onSnapshot(collection(db, getUserColPath('rental_inventory')), (snap) => {
+          setRentalInventory(snap.docs.map(d => ({ id: d.id, ...d.data() } as RentalInventoryItem)));
+        }, err => handleFirestoreError(err, OperationType.LIST, 'rental_inventory')),
+
         onSnapshot(collection(db, getUserColPath('settings')), (snap) => {
           if (!snap.empty) {
             setSettings({ id: snap.docs[0].id, ...snap.docs[0].data() } as SystemSetting);
@@ -408,8 +421,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.setItem('forsdig_contracts', JSON.stringify(contracts));
       localStorage.setItem('forsdig_payouts', JSON.stringify(payouts));
       localStorage.setItem('forsdig_targets', JSON.stringify(targets));
+      localStorage.setItem('forsdig_rental_inventory', JSON.stringify(rentalInventory));
     }
-  }, [isDemoMode, customers, products, productCategories, invoices, payments, expenses, cashAccounts, receivables, notifications, logs, settings, users, contracts, payouts, targets]);
+  }, [isDemoMode, customers, products, productCategories, invoices, payments, expenses, cashAccounts, receivables, notifications, logs, settings, users, contracts, payouts, targets, rentalInventory]);
 
   // Automatic Background Overdue Detector
   useEffect(() => {
@@ -1546,6 +1560,32 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     await logActivity(`Kontrak sewa ${contract.contractNumber} telah ditandatangani secara elektronik`, 'Kontrak Sewa');
     await addNotification('Tanda Tangan Kontrak Sewa', `Kontrak ${contract.contractNumber} telah aktif setelah ditandatangani`, 'success');
+
+    // Auto-allocation of inventory item
+    const matchedItem = rentalInventory.find(i => i.name === contract.propertyName && i.status === 'Tersedia');
+    if (matchedItem) {
+      const updatedItem: Partial<RentalInventoryItem> = {
+        status: 'Disewa',
+        customerName: contract.customerName,
+        associatedContractId: contract.id,
+        associatedContractNumber: contract.contractNumber,
+        rentedAt: contract.startDate,
+        autoReturnDate: contract.endDate,
+        updatedAt: timestamp
+      };
+
+      if (isDemoMode) {
+        setRentalInventory(prev => prev.map(i => i.id === matchedItem.id ? { ...i, ...updatedItem } : i));
+      } else {
+        try {
+          await setDoc(doc(db, getUserColPath('rental_inventory'), matchedItem.id), updatedItem, { merge: true });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `rental_inventory/${matchedItem.id}`);
+        }
+      }
+      await logActivity(`Alokasi Otomatis: Item ${matchedItem.name} (S/N: ${matchedItem.serialNumber}) disewakan ke ${contract.customerName} lewat kontrak ${contract.contractNumber}`, 'Inventaris Sewa');
+      await addNotification('Inventaris Dialokasikan', `Item ${matchedItem.name} otomatis dialokasikan ke ${contract.customerName}`, 'info');
+    }
   };
 
   const addPayoutRequest = async (data: Omit<CommissionPayout, 'id' | 'payoutId' | 'payoutNumber' | 'status' | 'requestedAt'>): Promise<CommissionPayout> => {
@@ -1630,6 +1670,80 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await logActivity(`Memperbarui target penjualan ${salesName} untuk bulan ${month} sebesar Rp ${Number(targetAmount).toLocaleString('id-ID')}`, 'Sales & Komisi');
   };
 
+  const addRentalInventoryItem = async (data: Omit<RentalInventoryItem, 'id' | 'itemId' | 'createdAt' | 'updatedAt'>) => {
+    const id = `rent-inv-${Date.now()}`;
+    const nextNum = rentalInventory.length + 1;
+    const itemId = `R-INV-${String(nextNum).padStart(3, '0')}`;
+    const timestamp = new Date().toISOString().split('T')[0];
+
+    const newItem: RentalInventoryItem = {
+      id,
+      itemId,
+      ...data,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    if (isDemoMode) {
+      setRentalInventory(prev => [newItem, ...prev]);
+    } else {
+      try {
+        await setDoc(doc(db, getUserColPath('rental_inventory'), id), newItem);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `rental_inventory/${id}`);
+      }
+    }
+
+    await logActivity(`Menambahkan item inventaris sewa baru: ${data.name} (${data.serialNumber})`, 'Inventaris Sewa');
+    await addNotification('Inventaris Baru Ditambah', `Item ${data.name} dengan S/N ${data.serialNumber} berhasil terdaftar.`, 'success');
+  };
+
+  const updateRentalInventoryItem = async (id: string, data: Partial<RentalInventoryItem>) => {
+    const timestamp = new Date().toISOString().split('T')[0];
+    const item = rentalInventory.find(i => i.id === id);
+    if (!item) return;
+
+    const updatedData = {
+      ...data,
+      updatedAt: timestamp
+    };
+
+    if (isDemoMode) {
+      setRentalInventory(prev => prev.map(i => i.id === id ? { ...i, ...updatedData } : i));
+    } else {
+      try {
+        await setDoc(doc(db, getUserColPath('rental_inventory'), id), updatedData, { merge: true });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `rental_inventory/${id}`);
+      }
+    }
+
+    if (data.status && data.status !== item.status) {
+      await logActivity(`Memperbarui status inventaris sewa ${item.name} (${item.serialNumber}) menjadi ${data.status}`, 'Inventaris Sewa');
+      await addNotification('Status Inventaris Diperbarui', `Item ${item.name} kini berstatus ${data.status}`, data.status === 'Tersedia' ? 'success' : (data.status === 'Disewa' ? 'info' : 'warning'));
+    } else {
+      await logActivity(`Memperbarui detail item inventaris sewa ${item.name}`, 'Inventaris Sewa');
+    }
+  };
+
+  const deleteRentalInventoryItem = async (id: string) => {
+    const item = rentalInventory.find(i => i.id === id);
+    if (!item) return;
+
+    if (isDemoMode) {
+      setRentalInventory(prev => prev.filter(i => i.id !== id));
+    } else {
+      try {
+        await deleteDoc(doc(db, getUserColPath('rental_inventory'), id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `rental_inventory/${id}`);
+      }
+    }
+
+    await logActivity(`Menghapus item inventaris sewa: ${item.name}`, 'Inventaris Sewa');
+    await addNotification('Inventaris Dihapus', `Item ${item.name} berhasil dihapus dari sistem`, 'danger');
+  };
+
   return (
     <BillingContext.Provider value={{
       currentUser,
@@ -1650,6 +1764,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       contracts,
       payouts,
       targets,
+      rentalInventory,
       login,
       register,
       loginWithGoogle,
@@ -1692,7 +1807,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       signContract,
       addPayoutRequest,
       updatePayoutStatus,
-      updateSalesTarget
+      updateSalesTarget,
+      addRentalInventoryItem,
+      updateRentalInventoryItem,
+      deleteRentalInventoryItem
     }}>
       {children}
     </BillingContext.Provider>

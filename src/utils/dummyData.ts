@@ -1,4 +1,4 @@
-import { Customer, Product, Invoice, Payment, Expense, CashAccount, SystemSetting, Receivable } from '../types';
+import { Customer, Product, Invoice, Payment, Expense, CashAccount, SystemSetting, Receivable, RentalInventoryItem } from '../types';
 
 export const DUMMY_CUSTOMERS: Customer[] = [
   {
@@ -312,3 +312,52 @@ export const DUMMY_SETTING: SystemSetting = {
   pphEnabled: false,
   pphRate: 2
 };
+
+export const DUMMY_RENTAL_INVENTORY: RentalInventoryItem[] = [
+  {
+    id: 'rent-inv-1',
+    itemId: 'R-INV-001',
+    serialNumber: 'SN-POS-8890A',
+    name: 'ForsdigPOS Mobile Handheld Terminal V2 (Android 11)',
+    status: 'Tersedia',
+    notes: 'Kondisi 98% mulus, baterai prima, bundling simcard Telkomsel IoT.',
+    createdAt: '2026-05-15',
+    updatedAt: '2026-05-15'
+  },
+  {
+    id: 'rent-inv-2',
+    itemId: 'R-INV-002',
+    serialNumber: 'SN-POS-2210B',
+    name: 'ForsdigPOS Complete Package (Software Premium + Terminal Handheld + Thermal Printer)',
+    status: 'Disewa',
+    customerName: 'CV. Sentosa Jaya',
+    associatedContractId: 'cont-demo-1',
+    associatedContractNumber: 'CONT-202606/0001',
+    rentedAt: '2026-06-11',
+    autoReturnDate: '2027-06-11',
+    notes: 'Dipre-konfigurasi untuk kasir utama cabang Sentosa Depok.',
+    createdAt: '2026-06-11',
+    updatedAt: '2026-06-11'
+  },
+  {
+    id: 'rent-inv-3',
+    itemId: 'R-INV-003',
+    serialNumber: 'SN-PRN-5541',
+    name: 'Thermal Printer Bluetooth 58mm Portable',
+    status: 'Maintenance',
+    notes: 'Sedang diperbaiki roller kertas macet & printhead redup.',
+    createdAt: '2026-05-20',
+    updatedAt: '2026-06-10'
+  },
+  {
+    id: 'rent-inv-4',
+    itemId: 'R-INV-004',
+    serialNumber: 'SN-POS-9940T',
+    name: 'Desktop Monitor POS Stand All-in-One 15 Inch',
+    status: 'Tersedia',
+    notes: 'Sistem komplit Windows 10 IoT, RAM 8GB, SSD 128GB.',
+    createdAt: '2026-05-01',
+    updatedAt: '2026-05-01'
+  }
+];
+

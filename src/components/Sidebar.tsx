@@ -33,6 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'laporan', label: 'Laporan Keuangan', icon: BarChart3, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
     { id: 'sales', label: 'Sales & Komisi', icon: Users, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
     { id: 'sewa', label: 'Kontrak Sewa', icon: PenTool, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
+    { id: 'inventaris-sewa', label: 'Inventaris Sewa', icon: Database, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
     { id: 'notifikasi', label: 'Notifikasi', icon: Bell, badge: notifications.filter(n => !n.isRead).length, roles: ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'] },
     { id: 'pengguna', label: 'Hak Akses & Log', icon: ShieldCheck, roles: ['Super Admin', 'Admin Keuangan'] },
     { id: 'pengaturan', label: 'Pengaturan', icon: Settings, roles: ['Super Admin'] }
