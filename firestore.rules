@@ -29,7 +29,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.userId is string && data.userId.size() <= 128 &&
              data.email is string && data.email.size() <= 128 &&
-             data.role in ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer'];
+             data.role in ['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer', 'Sales'];
     }
 
     // 2. Customer Validation
@@ -116,125 +116,85 @@ service cloud.firestore {
              data.companyName is string && data.companyName.size() <= 200;
     }
 
-    // Match blocks for collections
+    // 12. RentContract Validation
+    function isValidRentContract(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.contractId is string && data.contractId.size() <= 128 &&
+             data.contractNumber is string && data.contractNumber.size() <= 128 &&
+             data.customerId is string && data.customerId.size() <= 128 &&
+             data.status in ['Draft', 'Menunggu Tanda Tangan', 'Aktif', 'Selesai', 'Batal'];
+    }
+
+    // 13. CommissionPayout Detail Validation
+    function isValidCommissionPayout(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.payoutId is string && data.payoutId.size() <= 128 &&
+             data.payoutNumber is string && data.payoutNumber.size() <= 128 &&
+             data.salesId is string && data.salesId.size() <= 128 &&
+             data.amount is number && data.amount >= 0 &&
+             data.status in ['Diajukan', 'Diproses', 'Selesai', 'Ditolak'];
+    }
+
+    // 14. SalesTarget Validation
+    function isValidSalesTarget(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.salesId is string && data.salesId.size() <= 128 &&
+             data.month is string && data.month.size() <= 30 &&
+             data.targetAmount is number && data.targetAmount >= 0;
+    }
+
+    // Match blocks for shared collections
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidUser(request.resource.data);
       allow update: if isSignedIn() && isValidUser(request.resource.data) && (request.auth.uid == userId || hasRole(['Super Admin']));
       allow delete: if hasRole(['Super Admin']);
-
-      // Nested user subcollections for multi-tenant data separation
-      match /product_categories/{categoryId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidProductCategory(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /customers/{customerId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidCustomer(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /products/{productId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidProduct(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /invoices/{invoiceId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidInvoice(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /payments/{paymentId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidPayment(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /receivables/{receivableId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidReceivable(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /expenses/{expenseId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidExpense(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /cash_accounts/{accountId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidCashAccount(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /notifications/{notificationId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidNotification(request.resource.data);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
-      }
-
-      match /activity_logs/{logId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create: if isSignedIn() && request.auth.uid == userId && isValidActivityLog(request.resource.data);
-        allow update, delete: if false;
-      }
-
-      match /settings/{settingId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create, update: if isSignedIn() && request.auth.uid == userId && isValidSetting(request.resource.data);
-        allow delete: if false;
-      }
     }
 
     match /customers/{customerId} {
       allow read: if isSignedIn();
-      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidCustomer(request.resource.data);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Sales']) && isValidCustomer(request.resource.data);
       allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
     }
 
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidProduct(request.resource.data);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Sales']) && isValidProduct(request.resource.data);
       allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
     }
 
     match /product_categories/{categoryId} {
       allow read: if isSignedIn();
-      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidProductCategory(request.resource.data);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Sales']) && isValidProductCategory(request.resource.data);
       allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
     }
 
     match /invoices/{invoiceId} {
       allow read: if isSignedIn();
-      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidInvoice(request.resource.data);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Sales']) && isValidInvoice(request.resource.data);
       allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
     }
 
     match /payments/{paymentId} {
       allow read: if isSignedIn();
-      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidPayment(request.resource.data);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Sales']) && isValidPayment(request.resource.data);
       allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
     }
 
     match /receivables/{receivableId} {
       allow read: if isSignedIn();
-      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidReceivable(request.resource.data);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Sales']) && isValidReceivable(request.resource.data);
       allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
     }
 
     match /expenses/{expenseId} {
-      allow read: if isSignedIn() && hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer']);
-      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan']) && isValidExpense(request.resource.data);
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff']) && isValidExpense(request.resource.data);
       allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
     }
 
     match /cash_accounts/{accountId} {
-      allow read: if isSignedIn() && hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Viewer']);
+      allow read: if isSignedIn();
       allow create, update: if hasRole(['Super Admin', 'Admin Keuangan']) && isValidCashAccount(request.resource.data);
       allow delete: if hasRole(['Super Admin']);
     }
@@ -246,14 +206,32 @@ service cloud.firestore {
     }
 
     match /activity_logs/{logId} {
-      allow read: if hasRole(['Super Admin', 'Admin Keuangan']);
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidActivityLog(request.resource.data);
       allow update, delete: if false;
     }
 
+    match /contracts/{contractId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Sales']) && isValidRentContract(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /payouts/{payoutId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan', 'Staff', 'Sales']) && isValidCommissionPayout(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
+    match /targets/{targetId} {
+      allow read: if isSignedIn();
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan']) && isValidSalesTarget(request.resource.data);
+      allow delete: if hasRole(['Super Admin', 'Admin Keuangan']);
+    }
+
     match /settings/{settingId} {
       allow read: if isSignedIn();
-      allow create, update: if hasRole(['Super Admin']) && isValidSetting(request.resource.data);
+      allow create, update: if hasRole(['Super Admin', 'Admin Keuangan']) && isValidSetting(request.resource.data);
       allow delete: if false;
     }
   }

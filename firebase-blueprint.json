@@ -203,6 +203,67 @@
         "qrisUrl": { "type": "string" }
       },
       "required": ["settingId", "companyName"]
+    },
+    "RentContract": {
+      "title": "RentContract",
+      "description": "Rental Contract details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "contractId": { "type": "string" },
+        "contractNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "propertyName": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "rentalAmount": { "type": "number" },
+        "paymentTerm": { "type": "string" },
+        "termsAndConditions": { "type": "string" },
+        "signatureDrawBase64": { "type": "string" },
+        "signedAt": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "customerTitle": { "type": "string" },
+        "signatureQrBase64": { "type": "string" }
+      },
+      "required": ["id", "contractId", "contractNumber", "customerId", "status", "createdAt", "updatedAt"]
+    },
+    "CommissionPayout": {
+      "title": "CommissionPayout",
+      "description": "Sales Commission Payout records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "payoutId": { "type": "string" },
+        "payoutNumber": { "type": "string" },
+        "salesId": { "type": "string" },
+        "salesName": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "bankAccount": { "type": "string" },
+        "status": { "type": "string" },
+        "requestedAt": { "type": "string" },
+        "processedAt": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "payoutId", "payoutNumber", "salesId", "amount", "status", "requestedAt"]
+    },
+    "SalesTarget": {
+      "title": "SalesTarget",
+      "description": "Sales target by month",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "salesId": { "type": "string" },
+        "salesName": { "type": "string" },
+        "month": { "type": "string" },
+        "targetAmount": { "type": "number" }
+      },
+      "required": ["id", "salesId", "month", "targetAmount"]
     }
   },
   "firestore": {
@@ -249,6 +310,18 @@
     "activity_logs": {
       "schema": "ActivityLog",
       "description": "Audit logging for enterprise compliant monitoring"
+    },
+    "contracts": {
+      "schema": "RentContract",
+      "description": "Rental and lease contracts"
+    },
+    "payouts": {
+      "schema": "CommissionPayout",
+      "description": "Commission payout lists"
+    },
+    "targets": {
+      "schema": "SalesTarget",
+      "description": "Sales targets per month"
     },
     "settings": {
       "schema": "Setting",

@@ -170,11 +170,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Path resolution helper for absolute data segregation
   const getUserColPath = (col: string) => {
-    if (isDemoMode || !currentUser?.userId) {
-      return col;
-    }
-    if (col === 'users') return 'users';
-    return `users/${currentUser.userId}/${col}`;
+    return col;
   };
 
   // 1. Auth states sync with Firebase
