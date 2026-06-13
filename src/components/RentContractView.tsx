@@ -129,7 +129,7 @@ export interface RentApplication {
 
 export const RentContractView: React.FC = () => {
   const { 
-    contracts, customers, addContract, updateContract, deleteContract, signContract,
+    contracts, customers, products, addContract, updateContract, deleteContract, signContract,
     logActivity, addNotification, currentUser, settings
   } = useBilling();
 
@@ -157,13 +157,13 @@ export const RentContractView: React.FC = () => {
         customerEmail: 'budi@sentosajaya.com',
         customerPhone: '081234567890',
         customerCompany: 'CV. Sentosa Jaya',
-        propertyName: 'Server Supermicro Rackmount 2U Intel Xeon Scalable',
+        propertyName: 'ForsdigPOS Complete Package (Software Premium + Terminal Handheld + Thermal Printer)',
         proposalDuration: '12 Bulan',
         rentPeriodOption: 'Bulanan',
         headingTo: 'PT. Foresyndo Global Indonesia',
-        proposedPrice: 15600000,
-        purpose: 'Infrastruktur database ERP & backup mirroring produksi internal',
-        notes: 'Mohon agar diprepare OS Rocky Linux 9 dan setup bandwidth dedicated 100 Mbps.',
+        proposedPrice: 850000,
+        purpose: 'Sistem POS Terintegrasi Pembayaran QRIS & Cetak Struk Instan',
+        notes: 'Pre-configured dengan akun merchant QRIS aktif & data master produk ter-import',
         createdAt: '2026-06-11',
         status: 'Menunggu Review'
       },
@@ -176,13 +176,13 @@ export const RentContractView: React.FC = () => {
         customerEmail: 'siti@berkahmakmur.co.id',
         customerPhone: '081122334455',
         customerCompany: 'CV. Berkah Makmur',
-        propertyName: 'Mesin Fotokopi Kyocera Multifungsi A3 TaskAlfa',
+        propertyName: 'ForsdigPOS Premium Software License',
         headingTo: 'PT. Foresyndo Global Indonesia',
         proposalDuration: '6 Bulan',
         rentPeriodOption: 'Bulanan',
-        proposedPrice: 8500000,
-        purpose: 'Operasional harian & penggandaan berkas dokumen legal kantor cabang',
-        notes: 'Harap diservis dan diganti tinta berkala setiap bulan oleh teknisi PT. FGI.',
+        proposedPrice: 350000,
+        purpose: 'Digitalisasi Transaksi Kasir & Manajemen Stok Toko Retail',
+        notes: 'Minta instalasi aplikasi ForsdigPOS v3.2 Premium & setup printer thermal bluetooth 58mm',
         createdAt: '2026-06-09',
         status: 'Diterima'
       }
@@ -1323,13 +1323,38 @@ export const RentContractView: React.FC = () => {
 
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Objek / Barang yang Ingin Disewa</label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Server Rackmount Xeon / Mesin Pabrik"
+                    <select
                       value={appPropertyName}
-                      onChange={(e) => setAppPropertyName(e.target.value)}
-                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white"
-                    />
+                      onChange={(e) => {
+                        setAppPropertyName(e.target.value);
+                        const activeProds = products ? products.filter(p => p.status === 'Aktif') : [];
+                        const matched = activeProds.find(p => p.name === e.target.value);
+                        if (matched) {
+                          setAppPrice(matched.price.toString());
+                        } else {
+                          if (e.target.value === 'ForsdigPOS Premium Software License') setAppPrice('350000');
+                          else if (e.target.value === 'ForsdigPOS Complete Package (Software Premium + Terminal Handheld + Thermal Printer)') setAppPrice('850000');
+                          else if (e.target.value === 'ForsdigPOS Hardware Terminal Handheld Android') setAppPrice('550000');
+                          else if (e.target.value === 'ForsdigPOS Standalone Desktop POS System') setAppPrice('1200000');
+                        }
+                      }}
+                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white cursor-pointer"
+                    >
+                      <option value="">-- Pilih Produk / Jasa --</option>
+                      <optgroup label="Paket Layanan ForsdigPOS">
+                        <option value="ForsdigPOS Complete Package (Software Premium + Terminal Handheld + Thermal Printer)">ForsdigPOS Complete Package (Software + Hardware Bundle)</option>
+                        <option value="ForsdigPOS Premium Software License">ForsdigPOS Premium Software License (Eceran/Bulanan)</option>
+                        <option value="ForsdigPOS Hardware Terminal Handheld Android">ForsdigPOS Hardware Terminal Handheld Android</option>
+                        <option value="ForsdigPOS Standalone Desktop POS System">ForsdigPOS Standalone Desktop POS System (Enterprise)</option>
+                      </optgroup>
+                      {(products ? products.filter(p => p.status === 'Aktif') : []).length > 0 && (
+                        <optgroup label="Produk Terdaftar Sistem">
+                          {(products ? products.filter(p => p.status === 'Aktif') : []).map(p => (
+                            <option key={p.id} value={p.name}>{p.name} (Rp {p.price.toLocaleString()})</option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
                   </div>
 
                   <div>
@@ -1374,17 +1399,37 @@ export const RentContractView: React.FC = () => {
 
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Tujuan Penggunaan Barang</label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Kebutuhan core database ERP prod"
+                    <select
                       value={appPurpose}
                       onChange={(e) => setAppPurpose(e.target.value)}
-                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white"
-                    />
+                      className="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl focus:border-[#D32F2F] outline-none bg-white cursor-pointer"
+                    >
+                      <option value="">-- Pilih Tujuan Penggunaan --</option>
+                      <option value="Digitalisasi Transaksi Kasir & Manajemen Stok Toko Retail">Digitalisasi Transaksi Kasir & Manajemen Stok Toko Retail</option>
+                      <option value="Sistem POS Terintegrasi Pembayaran QRIS & Cetak Struk Instan">Sistem POS Terintegrasi Pembayaran QRIS & Cetak Struk Instan</option>
+                      <option value="Pengawasan Real-time Cabang Bisnis & Laporan Keuangan Harian">Pengawasan Real-time Cabang Bisnis & Laporan Keuangan Harian</option>
+                      <option value="Operasional Point of Sales untuk Event, FnB, dan Pameran Temporer">Operasional Point of Sales untuk Event, FnB, dan Pameran Temporer</option>
+                      <option value="Kebutuhan Operasional Kasir Restoran Berbasis Android / Cloud">Kebutuhan Operasional Kasir Restoran Berbasis Android / Cloud</option>
+                    </select>
                   </div>
 
                   <div className="col-span-1 md:col-span-2">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-1.5">Rincian / Keterangan Kebutuhan Khusus</label>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                      <label className="block text-[10px] font-black text-slate-500 uppercase">Rincian / Keterangan Kebutuhan Khusus</label>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) setAppNotes(e.target.value);
+                        }}
+                        className="border border-slate-200 text-[10px] font-bold rounded-lg p-1 bg-slate-50 text-slate-600 focus:outline-none cursor-pointer"
+                      >
+                        <option value="">-- Pilih Template Kebutuhan --</option>
+                        <option value="Minta instalasi aplikasi ForsdigPOS v3.2 Premium & setup printer thermal bluetooth 58mm">Paket Kasir Standar (Instalasi POS Premium + Setup Printer 58mm)</option>
+                        <option value="Pre-configured dengan akun merchant QRIS aktif & data master produk ter-import">Paket QRIS Ready (Konfigurasi Merchant QRIS + Impor Data Produk)</option>
+                        <option value="Sewa unit tablet / handheld terminal Android lengkap dengan simcard kuota 10GB/bulan">Paket Mobile POS (Sewa Handheld Terminal + SIM Card Internet 10GB/Masa)</option>
+                        <option value="Dukungan pelatihan on-site staff kasir & garansi ganti unit rusak kurang dari 24 jam">Paket Garansi Penuh (Pelatihan On-Site Staff Kasir + Garansi Unit Pengganti 24 Jam)</option>
+                        <option value="Integrasi API custom untuk sinkronisasi inventaris sistem warehouse eksternal">Paket Enterprise (Sinkronisasi API custom ke sistem warehouse eksternal)</option>
+                      </select>
+                    </div>
                     <textarea
                       rows={2}
                       placeholder="Sebutkan catatan instalasi OS, bandwidth khusus, perawatan rutin, atau detail lainnya..."
@@ -1492,7 +1537,7 @@ export const RentContractView: React.FC = () => {
                     <div className="text-[11px] font-bold leading-normal">
                       <p className="text-slate-400 font-semibold uppercase">Tersurat Kepada Yth.</p>
                       <p className="text-xs text-slate-900 font-extrabold">Direktur Utama PT. Foresyndo Global Indonesia</p>
-                      <p className="text-slate-500">Komp. Office Hub Blok G-5, DKI Jakarta</p>
+                      <p className="text-slate-500">{settings?.address || 'Komp. Office Hub Blok G-5, DKI Jakarta'}</p>
                       <p className="mt-3 text-red-650 italic font-bold">Hal: Surat Pernyataan Minat Sewa Alat & Kelayakan Operasional</p>
                     </div>
 

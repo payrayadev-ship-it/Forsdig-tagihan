@@ -1350,7 +1350,7 @@ export const generateRentalApplicationPDF = (
   doc.text('Direktur Utama PT. Foresyndo Global Indonesia', marginX, currentY);
   currentY += 4.5;
   doc.setFont('times', 'normal');
-  doc.text('Komp. Office Hub Blok G-5, DKI Jakarta', marginX, currentY);
+  doc.text(settings?.address || 'Komp. Office Hub Blok G-5, DKI Jakarta', marginX, currentY);
   currentY += 4.5;
   doc.text('Perihal: Surat Pengajuan Minat Sewa Properti & Fasilitas', marginX, currentY);
 
@@ -1510,4 +1510,225 @@ export const generateRentalApplicationPDF = (
   doc.text('Surat Pengajuan Minat Sewa Digital Resmi | PT. Foresyndo Global Indonesia | Sistem Otomasi Barcode & QR', pageWidth / 2, pageHeight - 8, { align: 'center' });
 
   doc.save(`SURAT_PENGAJUAN_${app.applicationNumber}_${app.customerName.replace(/[^a-zA-Z]/g, '_')}.pdf`);
+};
+
+export const exportTaxReportToPDF = (
+  startDate: string,
+  endDate: string,
+  ppnRate: number,
+  pphRate: number,
+  taxBasis: 'accrual' | 'cash',
+  totalTaxDPP: number,
+  totalTaxPPN: number,
+  totalTaxPPh: number,
+  taxCalculations: Array<{
+    invoice: any;
+    dpp: number;
+    ppn: number;
+    pph: number;
+  }>,
+  sptMasaSummary: Array<{
+    monthKey: string;
+    monthLabel: string;
+    invoicesCount: number;
+    dppSum: number;
+    ppnSum: number;
+    pphSum: number;
+  }>,
+  settings: SystemSetting | null
+) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = 15;
+  const contentWidth = pageWidth - (marginX * 2);
+
+  const primaryCrimson: [number, number, number] = [190, 24, 74];
+  const textDark: [number, number, number] = [30, 41, 59];
+  const textMuted: [number, number, number] = [100, 116, 139];
+  const borderLight: [number, number, number] = [226, 232, 240];
+  const bgLight: [number, number, number] = [248, 250, 252];
+
+  doc.setFillColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.rect(0, 0, pageWidth, 4, 'F');
+
+  let currentY = 15;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text((settings?.companyName || 'PT. FORESYNDO GLOBAL INDONESIA').toUpperCase(), marginX, currentY);
+  
+  currentY += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('Modul Laporan Kepatuhan Pajak (VAT & Income Tax PPh 23)', marginX, currentY);
+
+  currentY += 10;
+  doc.setDrawColor(borderLight[0], borderLight[1], borderLight[2]);
+  doc.line(marginX, currentY, pageWidth - marginX, currentY);
+
+  currentY += 8;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('LAPORAN ESTIMASI PAJAK PPN & PPh 23', marginX, currentY);
+
+  currentY += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.text(`Periode Laporan: ${startDate} s/d ${endDate}`, marginX, currentY);
+  doc.text(`Metode Pengakuan Pajak: ${taxBasis === 'accrual' ? 'Akrual (Berdasarkan Total Invoice Terbit)' : 'Kas Terbayar (Berdasarkan Nominal Terbayar)'}`, marginX, currentY + 4.5);
+  doc.text(`Tarif PPN: ${ppnRate}% | Tarif PPh 23: ${pphRate}%`, marginX, currentY + 9);
+
+  currentY += 18;
+
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.rect(marginX, currentY, 55, 18, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text('TOTAL DPP TERBAYAR', marginX + 4, currentY + 5);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+  doc.text(`Rp ${totalTaxDPP.toLocaleString('id-ID')}`, marginX + 4, currentY + 12);
+
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.rect(marginX + 60, currentY, 55, 18, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text(`TOTAL PPN TERUTANG (${ppnRate}%)`, marginX + 64, currentY + 5);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(`Rp ${totalTaxPPN.toLocaleString('id-ID')}`, marginX + 64, currentY + 12);
+
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.rect(marginX + 120, currentY, 60, 18, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text(`TOTAL ESTIMASI PPh 23 (${pphRate}%)`, marginX + 124, currentY + 5);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(21, 128, 61);
+  doc.text(`Rp ${totalTaxPPh.toLocaleString('id-ID')}`, marginX + 124, currentY + 12);
+
+  currentY += 26;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('I. RINGKASAN SPT MASA PAJAK', marginX, currentY);
+
+  currentY += 5;
+  doc.setFillColor(241, 245, 249);
+  doc.rect(marginX, currentY, contentWidth, 6, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text('Masa Pajak (Bulan)', marginX + 3, currentY + 4.5);
+  doc.text('Jumlah Invoice', marginX + 45, currentY + 4.5);
+  doc.text('Total DPP (Rp)', marginX + 75, currentY + 4.5);
+  doc.text(`PPN ${ppnRate}% (Rp)`, marginX + 115, currentY + 4.5);
+  doc.text(`PPh 23 ${pphRate}% (Rp)`, marginX + 150, currentY + 4.5);
+
+  currentY += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(71, 85, 105);
+
+  sptMasaSummary.forEach(row => {
+    doc.line(marginX, currentY, pageWidth - marginX, currentY);
+    doc.text(row.monthLabel, marginX + 3, currentY + 4.5);
+    doc.text(`${row.invoicesCount} Transaksi`, marginX + 45, currentY + 4.5);
+    doc.text(`Rp ${row.dppSum.toLocaleString('id-ID')}`, marginX + 75, currentY + 4.5);
+    doc.text(`Rp ${row.ppnSum.toLocaleString('id-ID')}`, marginX + 115, currentY + 4.5);
+    doc.text(`Rp ${row.pphSum.toLocaleString('id-ID')}`, marginX + 150, currentY + 4.5);
+    currentY += 6;
+  });
+
+  currentY += 8;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text('II. RINCIAN PERHITUNGAN INVOICE TERBAYAR', marginX, currentY);
+
+  currentY += 5;
+  doc.setFillColor(241, 245, 249);
+  doc.rect(marginX, currentY, contentWidth, 6, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text('No. Invoice', marginX + 3, currentY + 4.5);
+  doc.text('Pelanggan', marginX + 35, currentY + 4.5);
+  doc.text('Tgl Terbit', marginX + 85, currentY + 4.5);
+  doc.text('Nilai Terbayar', marginX + 105, currentY + 4.5);
+  doc.text('DPP', marginX + 130, currentY + 4.5);
+  doc.text(`PPN (${ppnRate}%)`, marginX + 152, currentY + 4.5);
+  doc.text(`PPh 23`, marginX + 168, currentY + 4.5);
+
+  currentY += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+
+  taxCalculations.slice(0, 18).forEach(item => {
+    if (currentY > pageHeight - 30) {
+      doc.addPage();
+      doc.setFillColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+      doc.rect(0, 0, pageWidth, 4, 'F');
+      currentY = 20;
+
+      doc.setFillColor(241, 245, 249);
+      doc.rect(marginX, currentY, contentWidth, 6, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85);
+      doc.text('No. Invoice', marginX + 3, currentY + 4.5);
+      doc.text('Pelanggan', marginX + 35, currentY + 4.5);
+      doc.text('Tgl Terbit', marginX + 85, currentY + 4.5);
+      doc.text('Nilai Terbayar', marginX + 105, currentY + 4.5);
+      doc.text('DPP', marginX + 130, currentY + 4.5);
+      doc.text(`PPN (${ppnRate}%)`, marginX + 152, currentY + 4.5);
+      doc.text(`PPh 23`, marginX + 168, currentY + 4.5);
+      currentY += 6;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(71, 85, 105);
+    }
+
+    doc.line(marginX, currentY, pageWidth - marginX, currentY);
+    doc.text(item.invoice.invoiceNumber, marginX + 3, currentY + 4.5);
+    doc.text((item.invoice.customerName || '').substring(0, 24), marginX + 35, currentY + 4.5);
+    doc.text(item.invoice.invoiceDate || '-', marginX + 85, currentY + 4.5);
+    doc.text(`Rp ${item.invoice.paidAmount.toLocaleString('id-ID')}`, marginX + 105, currentY + 4.5);
+    doc.text(`Rp ${Math.round(item.dpp).toLocaleString('id-ID')}`, marginX + 130, currentY + 4.5);
+    doc.text(`Rp ${Math.round(item.ppn).toLocaleString('id-ID')}`, marginX + 152, currentY + 4.5);
+    doc.text(`Rp ${Math.round(item.pph).toLocaleString('id-ID')}`, marginX + 168, currentY + 4.5);
+    currentY += 6;
+  });
+
+  currentY += 10;
+  if (currentY > pageHeight - 30) {
+    doc.addPage();
+    doc.setFillColor(primaryCrimson[0], primaryCrimson[1], primaryCrimson[2]);
+    doc.rect(0, 0, pageWidth, 4, 'F');
+    currentY = 20;
+  }
+  
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
+  doc.text('* Catatan: Laporan ini dihitung secara sistem terotomasi untuk keperluan estimasi SPT Masa.', marginX, currentY);
+  doc.text('  Perhitungan PPN & PPh 23 didasarkan pada Undang-Undang HPP dan pajak jasa konstruksi/sewa yang berlaku usaha di Indonesia.', marginX, currentY + 4);
+
+  doc.save(`FORSDIG_Laporan_Pajak_Masa_${startDate}_sd_${endDate}.pdf`);
 };
