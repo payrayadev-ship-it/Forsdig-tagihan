@@ -120,11 +120,22 @@ app.post('/api/send-email', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Parameter "to", "subject", dan "html" wajib diisi.' });
     }
 
-    const apiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
+    let apiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
+    if (apiKey) {
+      // Strips any potential outer quotes and whitespaces from user-defined environment variable secrets
+      apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
+    }
+
     if (apiKey) {
       console.log(`[Email Service] Attempting to send real email to ${to} using Resend API Key...`);
+      
+      // Sanitize and quote the company display name as required by RFC 5322 (strict email formats)
+      const cleanCompany = (companyName || 'FORSDIG')
+        .replace(/["\\]/g, '') // strip existing quotes/backslashes
+        .trim();
+
       const payload: any = {
-        from: `${companyName || 'FORSDIG'} <onboarding@resend.dev>`,
+        from: `"${cleanCompany}" <onboarding@resend.dev>`,
         to: Array.isArray(to) ? to : [to],
         subject: subject,
         html: html,
@@ -153,10 +164,25 @@ app.post('/api/send-email', async (req, res) => {
       } else {
         const errData: any = await response.json().catch(() => ({}));
         console.error(`[Email Service] Resend API error:`, errData);
+        
+        let errorMessage = errData.message || `HTTP ${response.status} dari Resend API`;
+        
+        // Enrich error message if we detect sandbox unverified email restrictions
+        const isSandboxRestricted = 
+          errorMessage.toLowerCase().includes('onboarding@resend.dev') ||
+          errorMessage.toLowerCase().includes('restricted') ||
+          errorMessage.toLowerCase().includes('verified') ||
+          errorMessage.toLowerCase().includes('validation') ||
+          response.status === 403;
+
+        if (isSandboxRestricted) {
+          errorMessage += '. (Tip: Pada mode free sandbox onboarding@resend.dev, Anda hanya diizinkan mengirim email ke alamat email pendaftaran Resend Anda sendiri. Silakan ubah alamat email penerima menjadi email akun Resend Anda untuk uji coba, atau verifikasi domain kustom di dashboard Resend.)';
+        }
+
         return res.status(response.status).json({
           success: false,
           sandbox: false,
-          error: errData.message || `HTTP ${response.status} dari Resend API`,
+          error: errorMessage,
         });
       }
     } else {
