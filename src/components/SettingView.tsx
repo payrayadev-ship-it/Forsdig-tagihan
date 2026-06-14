@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { useBilling } from '../context/BillingContext';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase';
 import { Settings, Save, CheckCircle2, ShieldCheck, Mail, Building, QrCode, Upload, X, Database, Globe, Cloud, Sparkles, Percent, FileSpreadsheet, Download, Calendar, Loader2 } from 'lucide-react';
 
 export const SettingView: React.FC = () => {
@@ -372,109 +370,134 @@ export const SettingView: React.FC = () => {
             Unggah gambar barcode QRIS statis / manual instansi Anda agar dapat tampil otomatis ketika klien memilih metode pembayaran QRIS di lembar tagihan atau kasir.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
-            <div className="flex-1 w-full">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Unggah File Barcode QRIS</label>
-              
-              <div className={`border-2 border-dashed rounded-xl p-4 transition text-center relative cursor-pointer ${
-                isUploading 
-                  ? 'border-red-400 bg-red-50/10 cursor-not-allowed' 
-                  : 'border-slate-200 hover:border-red-400 bg-white'
-              }`}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={isReadOnly || isUploading}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
+          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-start">
+            <div className="flex-1 w-full space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Unggah File Barcode QRIS</label>
+                
+                <div className={`border-2 border-dashed rounded-xl p-4 transition text-center relative cursor-pointer ${
+                  isUploading 
+                    ? 'border-red-400 bg-red-50/10 cursor-not-allowed' 
+                    : 'border-slate-200 hover:border-red-400 bg-white'
+                }`}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isReadOnly || isUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
 
-                    // Limit to 5MB
-                    if (file.size > 5 * 1024 * 1024) {
-                      alert("Ukuran gambar terlalu besar. Batas maksimal adalah 5MB.");
-                      return;
-                    }
+                      // Limit to 5MB
+                      if (file.size > 5 * 1024 * 1024) {
+                        alert("Ukuran gambar terlalu besar. Batas maksimal adalah 5MB.");
+                        return;
+                      }
 
-                    if (isDemoMode) {
-                      // Offline Sandbox Demo Mode: Read as base64 Data URL
+                      setIsUploading(true);
+                      setUploadProgress("Membaca berkas...");
+                      
                       const reader = new FileReader();
                       reader.onloadend = () => {
                         if (typeof reader.result === 'string') {
                           setQrisUrl(reader.result);
                         }
+                        setIsUploading(false);
+                        setUploadProgress("");
+                      };
+                      reader.onerror = () => {
+                        alert("Gagal membaca berkas gambar.");
+                        setIsUploading(false);
+                        setUploadProgress("");
                       };
                       reader.readAsDataURL(file);
-                    } else {
-                      // Online Firebase Mode: Upload to Firebase Storage
-                      setIsUploading(true);
-                      setUploadProgress("Menyiapkan berkas...");
-                      try {
-                        const userId = currentUser?.uid || "shared";
-                        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-                        const storagePath = `qris/${userId}/${Date.now()}_${cleanFileName}`;
-                        const imageRef = storageRef(storage, storagePath);
-                        
-                        setUploadProgress("Mengunggah ke Firebase Storage...");
-                        const snapshot = await uploadBytes(imageRef, file);
-                        
-                        setUploadProgress("Membuat URL unduhan...");
-                        const downloadUrl = await getDownloadURL(snapshot.ref);
-                        
-                        setQrisUrl(downloadUrl);
-                        setUploadProgress("");
-                      } catch (error: any) {
-                        console.error("Storage upload failed, falling back to base64:", error);
-                        // Fallback to base64 Data URL if permission is denied or any storage bucket config is missing
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          if (typeof reader.result === 'string') {
-                            setQrisUrl(reader.result);
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                        alert(`Informasi: Menggunakan data lokal karena pengunggahan ke Firebase Storage mengalami kendala (${error.message || "Akses ditolak"}). Harap klik "Simpan Parameter" di bawah.`);
-                      } finally {
-                        setIsUploading(false);
-                      }
-                    }
-                  }}
-                  className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                />
-                {isUploading ? (
-                  <>
-                    <Loader2 className="animate-spin text-red-500 mx-auto mb-1.5" size={20} />
-                    <span className="block text-xs font-bold text-red-750">Sedang Mengunggah...</span>
-                    <span className="block text-[10px] text-slate-500 mt-0.5">{uploadProgress}</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload size={20} className="text-slate-400 mx-auto mb-1.5" />
-                    <span className="block text-xs font-bold text-slate-700">Pilih berkas gambar atau drag & drop</span>
-                    <span className="block text-[10px] text-slate-400 font-semibold mt-0.5">
-                      {isDemoMode 
-                        ? "Mendukung format gambar up to 5MB (Base64)" 
-                        : "Unggah otomatis ke Firebase Cloud Storage Bucket"}
-                    </span>
-                  </>
-                )}
-              </div>
-              {/* Informative status badge */}
-              {!isDemoMode && qrisUrl && qrisUrl.startsWith('http') && (
-                <div className="mt-2 text-[10px] text-emerald-700 font-extrabold flex items-center gap-1 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-100">
-                  <ShieldCheck size={11} className="text-emerald-500" />
-                  <span>Selesai! Link gambar tersimpan aman di Firebase Cloud Storage.</span>
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="animate-spin text-red-500 mx-auto mb-1.5" size={20} />
+                      <span className="block text-xs font-bold text-red-750">Sedang Memproses Gambar...</span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5">{uploadProgress}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={20} className="text-slate-400 mx-auto mb-1.5" />
+                      <span className="block text-xs font-bold text-slate-700">Pilih berkas gambar atau drag & drop</span>
+                      <span className="block text-[10px] text-slate-400 font-semibold mt-0.5">
+                        Mendukung format gambar up to 5MB (Disimpan sebagai Base64)
+                      </span>
+                    </>
+                  )}
                 </div>
-              )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Atau Tulis / Edit Tautan (URL) QRIS Manual</label>
+                <input
+                  type="text"
+                  disabled={isReadOnly || isUploading}
+                  value={qrisUrl}
+                  onChange={(e) => setQrisUrl(e.target.value)}
+                  placeholder="Contoh: https://perusahaan.id/qris-statis.png"
+                  className="w-full border border-slate-200 outline-none p-2.5 text-xs rounded-xl focus:border-red-500 disabled:bg-slate-50 disabled:text-slate-400 font-semibold text-slate-800"
+                  id="settings-qris-url"
+                />
+
+                {/* Live verification preview directly under URL field */}
+                {qrisUrl ? (
+                  <div className="mt-3 p-3 bg-white border border-slate-205 rounded-xl space-y-2">
+                    <span className="block text-[9px] font-extrabold text-slate-450 uppercase tracking-wider">Live Preview dari URL / Kode Anda (Belum Disimpan)</span>
+                    <div className="flex items-center justify-center p-3 bg-slate-50 border border-slate-100 rounded-lg min-h-44 relative">
+                      <img
+                        src={qrisUrl}
+                        alt="Verifikasi Live QRIS Preview"
+                        className="max-h-40 max-w-full object-contain rounded"
+                        id="live-qris-image"
+                        onError={(e) => {
+                          const imgEl = e.currentTarget;
+                          imgEl.style.display = 'none';
+                          const errEl = imgEl.parentElement?.querySelector('#qris-error-view');
+                          if (errEl) {
+                            errEl.classList.remove('hidden');
+                          }
+                        }}
+                        onLoad={(e) => {
+                          const imgEl = e.currentTarget;
+                          imgEl.style.display = 'block';
+                          const errEl = imgEl.parentElement?.querySelector('#qris-error-view');
+                          if (errEl) {
+                            errEl.classList.add('hidden');
+                          }
+                        }}
+                      />
+                      <div id="qris-error-view" className="hidden text-center p-4 text-red-500 max-w-xs">
+                        <X size={20} className="mx-auto mb-1 text-red-400" />
+                        <span className="block text-[10px] font-bold uppercase tracking-wide">Gambar Gagal Dimuat</span>
+                        <p className="text-[10px] text-slate-400 font-semibold mt-0.5 leading-relaxed">
+                          Pastikan link mengarah ke file gambar asli (JPG/PNG) yg dapat diakses publik.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
-            {/* Thumbnail Preview component */}
-            <div className="w-32 h-32 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center p-2 relative overflow-hidden shrink-0">
+            {/* Side Static Thumbnail Preview component */}
+            <div className="w-32 h-32 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center p-2 relative overflow-hidden shrink-0 mt-6 sm:mt-0">
               {qrisUrl ? (
                 <>
                   <img
                     src={qrisUrl}
                     alt="Manual QRIS Preview"
                     className="w-full h-full object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.opacity = '20%';
+                    }}
+                    onLoad={(e) => {
+                      e.currentTarget.style.opacity = '100%';
+                    }}
                   />
                   {!isReadOnly && !isUploading && (
                     <button
