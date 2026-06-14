@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     // Prepare payload
     const payload = {
-      from: `"${cleanCompany}" <onboarding@resend.dev>`,
+      from: `"${cleanCompany}" <tagihan@forsdigpos.my.id>`,
       to: Array.isArray(to) ? to : [to],
       subject: subject,
       html: html,
@@ -76,7 +76,7 @@ export default async function handler(req, res) {
       
       // Improve user troubleshooting for sandbox limitations
       if (
-        errorMsg.toLowerCase().includes('onboarding@resend.dev') ||
+        errorMsg.toLowerCase().includes('tagihan@forsdigpos.my.id') ||
         errorMsg.toLowerCase().includes('restricted') ||
         errorMsg.toLowerCase().includes('verified')
       ) {
