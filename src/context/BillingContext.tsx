@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { 
-  collection, doc, setDoc, deleteDoc, onSnapshot, getDocs, writeBatch 
+  collection, doc, setDoc as originalSetDoc, deleteDoc, onSnapshot, getDocs, writeBatch 
 } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { 
@@ -14,6 +14,64 @@ import {
   DUMMY_EXPENSES, DUMMY_CASH_ACCOUNTS, DUMMY_SETTING, DUMMY_RECEIVABLES, DUMMY_RENTAL_INVENTORY
 } from '../utils/dummyData';
 import { generateInvoicePDFBase64 } from '../utils/pdfGenerator';
+
+// Custom safe setDoc wrapper to sanitize undefined values and help debug.
+const setDoc = async (ref: any, data: any, options?: any) => {
+  const undefinedFields: string[] = [];
+  const inspectAndGetUndefined = (obj: any, path = "") => {
+    if (obj && typeof obj === 'object') {
+      Object.entries(obj).forEach(([key, val]) => {
+        const currentPath = path ? `${path}.${key}` : key;
+        if (val === undefined) {
+          undefinedFields.push(currentPath);
+        } else if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+          inspectAndGetUndefined(val, currentPath);
+        } else if (Array.isArray(val)) {
+          val.forEach((item, index) => {
+            inspectAndGetUndefined(item, `${currentPath}[${index}]`);
+          });
+        }
+      });
+    }
+  };
+
+  inspectAndGetUndefined(data);
+  if (undefinedFields.length > 0) {
+    console.warn(`[Firestore Debug] Found undefined field(s) on save to path "${ref.path}":`, undefinedFields);
+  }
+
+  // Sanitasi data: filter out undefined values recursively
+  const recursiveSanitize = (obj: any): any => {
+    if (obj === undefined) return null;
+    if (obj === null) return null;
+    if (Array.isArray(obj)) {
+      return obj.map(item => recursiveSanitize(item));
+    }
+    if (typeof obj === 'object' && !(obj instanceof Date)) {
+      const entries = Object.entries(obj)
+        .filter(([_, value]) => value !== undefined)
+        .map(([key, value]) => [key, recursiveSanitize(value)]);
+      return Object.fromEntries(entries);
+    }
+    return obj;
+  };
+
+  const cleanData = recursiveSanitize(data);
+
+  // Logging sebelum save:
+  const isInvoice = ref.path.toLowerCase().includes('invoice');
+  if (isInvoice) {
+    console.log('Saving Invoice:', cleanData);
+  } else {
+    console.log(`Saving document to path: ${ref.path}`, cleanData);
+  }
+
+  if (options) {
+    return await originalSetDoc(ref, cleanData, options);
+  } else {
+    return await originalSetDoc(ref, cleanData);
+  }
+};
 
 interface BillingContextProps {
   currentUser: UserProfile | null;

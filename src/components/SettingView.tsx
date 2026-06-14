@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useBilling } from '../context/BillingContext';
-import { Settings, Save, CheckCircle2, ShieldCheck, Mail, Building, QrCode, Upload, X, Database, Globe, Cloud, Sparkles, Percent, FileSpreadsheet, Download, Calendar } from 'lucide-react';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
+import { Settings, Save, CheckCircle2, ShieldCheck, Mail, Building, QrCode, Upload, X, Database, Globe, Cloud, Sparkles, Percent, FileSpreadsheet, Download, Calendar, Loader2 } from 'lucide-react';
 
 export const SettingView: React.FC = () => {
   const { 
@@ -33,6 +35,8 @@ export const SettingView: React.FC = () => {
   const [pphRate, setPphRate] = useState<number>(settings.pphRate ?? 2);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -372,14 +376,27 @@ export const SettingView: React.FC = () => {
             <div className="flex-1 w-full">
               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Unggah File Barcode QRIS</label>
               
-              <div className="border-2 border-dashed border-slate-200 hover:border-red-400 bg-white rounded-xl p-4 transition text-center relative cursor-pointer">
+              <div className={`border-2 border-dashed rounded-xl p-4 transition text-center relative cursor-pointer ${
+                isUploading 
+                  ? 'border-red-400 bg-red-50/10 cursor-not-allowed' 
+                  : 'border-slate-200 hover:border-red-400 bg-white'
+              }`}>
                 <input
                   type="file"
                   accept="image/*"
-                  disabled={isReadOnly}
-                  onChange={(e) => {
+                  disabled={isReadOnly || isUploading}
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
+                    if (!file) return;
+
+                    // Limit to 5MB
+                    if (file.size > 5 * 1024 * 1024) {
+                      alert("Ukuran gambar terlalu besar. Batas maksimal adalah 5MB.");
+                      return;
+                    }
+
+                    if (isDemoMode) {
+                      // Offline Sandbox Demo Mode: Read as base64 Data URL
                       const reader = new FileReader();
                       reader.onloadend = () => {
                         if (typeof reader.result === 'string') {
@@ -387,14 +404,67 @@ export const SettingView: React.FC = () => {
                         }
                       };
                       reader.readAsDataURL(file);
+                    } else {
+                      // Online Firebase Mode: Upload to Firebase Storage
+                      setIsUploading(true);
+                      setUploadProgress("Menyiapkan berkas...");
+                      try {
+                        const userId = currentUser?.uid || "shared";
+                        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+                        const storagePath = `qris/${userId}/${Date.now()}_${cleanFileName}`;
+                        const imageRef = storageRef(storage, storagePath);
+                        
+                        setUploadProgress("Mengunggah ke Firebase Storage...");
+                        const snapshot = await uploadBytes(imageRef, file);
+                        
+                        setUploadProgress("Membuat URL unduhan...");
+                        const downloadUrl = await getDownloadURL(snapshot.ref);
+                        
+                        setQrisUrl(downloadUrl);
+                        setUploadProgress("");
+                      } catch (error: any) {
+                        console.error("Storage upload failed, falling back to base64:", error);
+                        // Fallback to base64 Data URL if permission is denied or any storage bucket config is missing
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          if (typeof reader.result === 'string') {
+                            setQrisUrl(reader.result);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                        alert(`Informasi: Menggunakan data lokal karena pengunggahan ke Firebase Storage mengalami kendala (${error.message || "Akses ditolak"}). Harap klik "Simpan Parameter" di bawah.`);
+                      } finally {
+                        setIsUploading(false);
+                      }
                     }
                   }}
                   className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                 />
-                <Upload size={20} className="text-slate-400 mx-auto mb-1.5" />
-                <span className="block text-xs font-bold text-slate-700">Pilih berkas gambar atau drag & drop</span>
-                <span className="block text-[10px] text-slate-400 font-semibold mt-0.5">Mendukung format PNG, JPG, GIF up to 2MB</span>
+                {isUploading ? (
+                  <>
+                    <Loader2 className="animate-spin text-red-500 mx-auto mb-1.5" size={20} />
+                    <span className="block text-xs font-bold text-red-750">Sedang Mengunggah...</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5">{uploadProgress}</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={20} className="text-slate-400 mx-auto mb-1.5" />
+                    <span className="block text-xs font-bold text-slate-700">Pilih berkas gambar atau drag & drop</span>
+                    <span className="block text-[10px] text-slate-400 font-semibold mt-0.5">
+                      {isDemoMode 
+                        ? "Mendukung format gambar up to 5MB (Base64)" 
+                        : "Unggah otomatis ke Firebase Cloud Storage Bucket"}
+                    </span>
+                  </>
+                )}
               </div>
+              {/* Informative status badge */}
+              {!isDemoMode && qrisUrl && qrisUrl.startsWith('http') && (
+                <div className="mt-2 text-[10px] text-emerald-700 font-extrabold flex items-center gap-1 bg-emerald-50 px-2 py-1.5 rounded-lg border border-emerald-100">
+                  <ShieldCheck size={11} className="text-emerald-500" />
+                  <span>Selesai! Link gambar tersimpan aman di Firebase Cloud Storage.</span>
+                </div>
+              )}
             </div>
 
             {/* Thumbnail Preview component */}
@@ -406,7 +476,7 @@ export const SettingView: React.FC = () => {
                     alt="Manual QRIS Preview"
                     className="w-full h-full object-contain"
                   />
-                  {!isReadOnly && (
+                  {!isReadOnly && !isUploading && (
                     <button
                       type="button"
                       onClick={() => setQrisUrl('')}

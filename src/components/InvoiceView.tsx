@@ -186,8 +186,8 @@ export const InvoiceView: React.FC = () => {
       let finalInvoiceNumber = '';
       if (editingInvoice) {
         await updateInvoice(editingInvoice.id, {
-          customerId: customer.id,
-          customerName: `${customer.name} - ${customer.company}`,
+          customerId: customer?.id || '',
+          customerName: `${customer?.name || ''} - ${customer?.company || ''}`,
           invoiceDate,
           dueDate,
           subtotal,
@@ -207,8 +207,8 @@ export const InvoiceView: React.FC = () => {
         finalInvoiceNumber = editingInvoice.invoiceNumber;
       } else {
         const calculatedInvoice = await addInvoice({
-          customerId: customer.id,
-          customerName: `${customer.name} - ${customer.company}`,
+          customerId: customer?.id || '',
+          customerName: `${customer?.name || ''} - ${customer?.company || ''}`,
           invoiceDate,
           dueDate,
           subtotal,
@@ -229,14 +229,14 @@ export const InvoiceView: React.FC = () => {
       }
 
       // Automatically dispatch email to customer if status is NOT Draft (published/diterbitkan)
-      if (status !== 'Draft' && customer.email) {
+      if (status !== 'Draft' && customer?.email) {
         const emailSubjectAuto = `[TAGIHAN RESMI] Invoice #${finalInvoiceNumber} - ${settings.companyName || 'FORSDIG'}`;
         const itemDetailsAuto = (items || [])
           .map(itm => `- ${itm.name || 'Layanan'} (${itm.qty} x Rp ${itm.price.toLocaleString('id-ID')})`)
           .join('\n');
         const formattedAmtAuto = calculatedTotal.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
 
-        const emailMessageAuto = `Yth. ${customer.name},\n\n` +
+        const emailMessageAuto = `Yth. ${customer?.name || ''},\n\n` +
           `Bersama surat elektronik ini, kami menginformasikan bahwa tagihan resmi Invoice #${finalInvoiceNumber} dari ${settings.companyName || 'FORSDIG'} telah DITERBITKAN secara otomatis dengan rincian berikut:\n\n` +
           `Ringkasan Item:\n${itemDetailsAuto}\n\n` +
           `Total Tagihan: ${formattedAmtAuto}\n` +
@@ -250,7 +250,7 @@ export const InvoiceView: React.FC = () => {
 
         try {
           const dispatchRes = await dispatchExternalEmail(
-            customer.email,
+            customer?.email || '',
             emailSubjectAuto,
             emailMessageAuto,
             finalInvoiceNumber
@@ -260,14 +260,14 @@ export const InvoiceView: React.FC = () => {
             const typeLog = dispatchRes.sandbox ? " (Sandbox Mode)" : " (Resend API)";
             if (logActivity) {
               await logActivity(
-                `[Auto-Kirim] Tagihan ${finalInvoiceNumber} terkirim otomatis ke ${customer.email}${typeLog}`,
+                `[Auto-Kirim] Tagihan ${finalInvoiceNumber} terkirim otomatis ke ${customer?.email || ''}${typeLog}`,
                 'Komunikasi_Email'
               );
             }
             if (addNotification) {
               await addNotification(
                 `Auto-Email Terkirim`,
-                `Invoice ${finalInvoiceNumber} diterbitkan & email otomatis sukses dikirim ke ${customer.email}.`,
+                `Invoice ${finalInvoiceNumber} diterbitkan & email otomatis sukses dikirim ke ${customer?.email || ''}.`,
                 'success'
               );
             }
