@@ -309,6 +309,15 @@ export const RentContractView: React.FC = () => {
 
   // Delivery state
   const [deliveryStatus, setDeliveryStatus] = useState<{ email?: 'idle' | 'sending' | 'success'; wa?: 'idle' | 'sending' | 'success' }>({});
+  const [appDeliveryStatus, setAppDeliveryStatus] = useState<{ email?: 'idle' | 'sending' | 'success'; wa?: 'idle' | 'sending' | 'success' }>({});
+
+  useEffect(() => {
+    setDeliveryStatus({});
+  }, [selectedContract]);
+
+  useEffect(() => {
+    setAppDeliveryStatus({});
+  }, [selectedApplication]);
 
   useEffect(() => {
     if (customers.length > 0) {
@@ -572,19 +581,197 @@ export const RentContractView: React.FC = () => {
     if (!selectedContract) return;
     setDeliveryStatus(prev => ({ ...prev, email: 'sending' }));
 
-    // Simulate direct dispatch along with generating a physical PDF attachment
+    try {
+      const pdfBase64 = generateContractPDF(selectedContract, settings, true);
+      if (!pdfBase64) {
+        throw new Error('Gagal merangkai file digital PDF kontrak secara internal.');
+      }
+
+      const subject = `[KONTRAK SEWA RESMI] Perjanjian Sewa #${selectedContract.contractNumber} - ${settings?.companyName || 'FORSDIG'}`;
+      const message = `Yth. ${selectedContract.customerName},\n\n` +
+        `Bersama dengan email ini, kami lampirkan salinan resmi dokumen Surat Perjanjian Kontrak Sewa Elektronik Anda dengan Nomor Kontrak #${selectedContract.contractNumber}.\n\n` +
+        `Rincian Transaksi:\n` +
+        `- Objek Sewa: ${selectedContract.propertyName}\n` +
+        `- Periode Sewa: ${selectedContract.startDate} s/d ${selectedContract.endDate}\n` +
+        `- Nominal Sewa: Rp ${selectedContract.rentalAmount.toLocaleString('id-ID')} (${selectedContract.paymentTerm})\n` +
+        `- Status Kontrak: ${selectedContract.status.toUpperCase()}\n\n` +
+        `Dokumen terlampir yang terbit dalam format digital PDF ini sah secara hukum UU ITE.\n\n` +
+        `Terima kasih atas kerja sama dan kepercayaan Anda.\n\n` +
+        `Hormat kami,\n` +
+        `**${settings?.companyName || 'PT Foresyndo Global Indonesia'}**`;
+
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div style="background-color: #D32F2F; color: #ffffff; padding: 24px; text-align: center;">
+            <h2 style="margin: 0; font-size: 18px; letter-spacing: 0.05em; font-weight: 800;">${settings?.companyName || 'FORSDIG'}</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.8);">Dokumen Kontrak Sewa Digital</p>
+          </div>
+          <div style="padding: 24px; background-color: #ffffff; font-size: 13px; line-height: 1.6;">
+            <p style="margin-top: 0; font-weight: bold;">Yth. ${selectedContract.customerName},</p>
+            <p style="white-space: pre-wrap;">${message.replace(/\n/g, '<br>')}</p>
+          </div>
+          <div style="background-color: #f1f5f9; padding: 16px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0;">
+            <p style="margin: 4px 0;">Hubungi kami: Telepon ${settings?.phone || '-'} | Email: ${settings?.email || '-'}</p>
+            <p style="margin: 4px 0 0 0;">&copy; ${new Date().getFullYear()} ${settings?.companyName || 'FORSDIG'}. Seluruh hak cipta dilindungi.</p>
+          </div>
+        </div>
+      `;
+
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: selectedContract.customerEmail,
+          subject,
+          html: htmlBody,
+          companyName: settings?.companyName || 'FORSDIG',
+          invoiceNumber: selectedContract.contractNumber,
+          message,
+          attachments: [
+            {
+              filename: `KONTRAK_${selectedContract.contractNumber}.pdf`,
+              content: pdfBase64
+            }
+          ]
+        })
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (res.ok && resData.success) {
+        setDeliveryStatus(prev => ({ ...prev, email: 'success' }));
+        await logActivity(
+          `Mengirim dokumen Kontrak Elektronik ${selectedContract.contractNumber} beserta Lampiran File PDF ke alamat email ${selectedContract.customerEmail}`,
+          'Kontrak Sewa'
+        );
+        await addNotification(
+          'Email Kontrak Sewa & PDF Terkirim',
+          `Pesan surat elektronik untuk Nomor Kontrak ${selectedContract.contractNumber} sukses terdistribusi ke ${selectedContract.customerEmail} beserta lampiran file PDF.`,
+          'success'
+        );
+      } else {
+        throw new Error(resData.error || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      console.error('Gagal mengirim email kontrak:', err);
+      setDeliveryStatus(prev => ({ ...prev, email: 'idle' }));
+      alert(`Informasi Pengiriman: Gagal mengirim berkas PDF Kontrak ke email (${err.message || 'Koneksi error'}).`);
+    }
+  };
+
+  const handleSendAppEmail = async () => {
+    if (!selectedApplication) return;
+    setAppDeliveryStatus(prev => ({ ...prev, email: 'sending' }));
+
+    try {
+      const pdfBase64 = generateRentalApplicationPDF(selectedApplication, settings, true);
+      if (!pdfBase64) {
+        throw new Error('Gagal merangkai file digital PDF pengajuan sewa sepihak.');
+      }
+      
+      const subject = `[PENGAJUAN SEWA] Dokumen Pengajuan #${selectedApplication.applicationNumber} - PT. Foresyndo Global Indonesia`;
+      const message = `Yth. Bapak/Ibu ${selectedApplication.customerName},\n\n` +
+        `Terima kasih telah mengajukan permohonan minat sewa Anda kepada kami. ` +
+        `Bersama dengan email ini, kami sertakan lampiran salinan PDF formal Surat Pengajuan Sewa Digital Anda dengan Nomor Registrasi #${selectedApplication.applicationNumber}.\n\n` +
+        `Rincian Pengajuan:\n` +
+        `- Objek/Barang Sewa: ${selectedApplication.propertyName}\n` +
+        `- Periode Rencana: ${selectedApplication.rentPeriodOption || 'Bulanan'} (Durasi: ${selectedApplication.proposalDuration})\n` +
+        `- Anggaran Diajukan: Rp ${selectedApplication.proposedPrice.toLocaleString('id-ID')}\n` +
+        `- Status Terkini: ${selectedApplication.status.toUpperCase()}\n\n` +
+        `Dokumen PDF terlampir telah sah tersertifikasi sistem verifikasi e-proposal kami.\n\n` +
+        `Hormat kami,\n` +
+        `**PT. Foresyndo Global Indonesia (Foresig ERP)**`;
+
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div style="background-color: #4f46e5; color: #ffffff; padding: 24px; text-align: center;">
+            <h2 style="margin: 0; font-size: 18px; letter-spacing: 0.05em; font-weight: 800;">PT. FORESYNDO GLOBAL INDONESIA</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: rgba(255,255,255,0.8);">Sistem Pengajuan Sewa Digital (E-Proposal)</p>
+          </div>
+          <div style="padding: 24px; background-color: #ffffff; font-size: 13px; line-height: 1.6;">
+            <p style="margin-top: 0; font-weight: bold;">Yth. Bapak/Ibu ${selectedApplication.customerName},</p>
+            <p style="white-space: pre-wrap;">${message.replace(/\n/g, '<br>')}</p>
+          </div>
+          <div style="background-color: #f1f5f9; padding: 16px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0;">
+            <p style="margin: 4px 0;">PT. FGI Office | Telepon ${settings?.phone || '-'} | Email: ${settings?.email || '-'}</p>
+            <p style="margin: 4px 0 0 0;">&copy; ${new Date().getFullYear()} PT. Foresyndo Global Indonesia. Seluruh hak cipta dilindungi.</p>
+          </div>
+        </div>
+      `;
+
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: selectedApplication.customerEmail,
+          subject,
+          html: htmlBody,
+          companyName: 'PT. Foresyndo Global Indonesia',
+          invoiceNumber: selectedApplication.applicationNumber,
+          message,
+          attachments: [
+            {
+              filename: `SURAT_PENGAJUAN_${selectedApplication.applicationNumber}.pdf`,
+              content: pdfBase64
+            }
+          ]
+        })
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (res.ok && resData.success) {
+        setAppDeliveryStatus(prev => ({ ...prev, email: 'success' }));
+        await logActivity(
+          `Mengirim dokumen Pengajuan Sewa ${selectedApplication.applicationNumber} beserta Lampiran File PDF ke email ${selectedApplication.customerEmail}`,
+          'Kontrak Sewa'
+        );
+        await addNotification(
+          'Email Pengajuan Sewa Terkirim',
+          `Surat Pengajuan #${selectedApplication.applicationNumber} sukses dikirim ke ${selectedApplication.customerEmail} beserta lampiran PDF terverifikasi.`,
+          'success'
+        );
+      } else {
+        throw new Error(resData.error || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      console.error('Gagal mengirim email pengajuan sewa:', err);
+      setAppDeliveryStatus(prev => ({ ...prev, email: 'idle' }));
+      alert(`Informasi Pengiriman: Gagal mengirim berkas PDF Pengajuan ke email (${err.message || 'Koneksi error'}).`);
+    }
+  };
+
+  const handleSendAppWhatsApp = async () => {
+    if (!selectedApplication) return;
+    setAppDeliveryStatus(prev => ({ ...prev, wa: 'sending' }));
+
+    const message = `Yth. *${selectedApplication.customerName}*,\n\n` +
+      `Berkas Surat Pengajuan Minat Sewa Digital resmi Anda dengan nomor registrasi *${selectedApplication.applicationNumber}* telah berhasil diproses oleh sistem PT FGI.\n\n` +
+      `*Rincian Pengajuan Sewa:*\n` +
+      `- Objek Sewa: ${selectedApplication.propertyName}\n` +
+      `- Durasi Rencana: ${selectedApplication.proposalDuration} (${selectedApplication.rentPeriodOption || 'Bulanan'})\n` +
+      `- Anggaran Diajukan: Rp ${selectedApplication.proposedPrice.toLocaleString('id-ID')}\n` +
+      `- Status Pengajuan: *${selectedApplication.status.toUpperCase()}*\n\n` +
+      `Salinan dokumen resmi lengkap beserta tanda tangan dan barcode e-verifikasi digital sudah kami persiapkan. Berkas PDF telah dikirimkan ke email terdaftar Anda (*${selectedApplication.customerEmail}*).\n\n` +
+      `Terima kasih atas kepercayaan Anda.\n*PT. Foresyndo Global Indonesia*`;
+
+    const waLink = `https://api.whatsapp.com/send?phone=${encodeURIComponent(selectedApplication.customerPhone)}&text=${encodeURIComponent(message)}`;
+
     setTimeout(async () => {
-      setDeliveryStatus(prev => ({ ...prev, email: 'success' }));
+      setAppDeliveryStatus(prev => ({ ...prev, wa: 'success' }));
       await logActivity(
-        `Mengirim dokumen Kontrak Elektronik ${selectedContract.contractNumber} beserta Lampiran File PDF ke alamat email ${selectedContract.customerEmail}`,
+        `Mengirimkan link dokumen Surat Pengajuan ${selectedApplication.applicationNumber} dan notifikasi berkas PDF ke WhatsApp ${selectedApplication.customerPhone}`,
         'Kontrak Sewa'
       );
       await addNotification(
-        'Email Kontrak Sewa & PDF Terkirim',
-        `Pesan surat elektronik untuk Nomor Kontrak ${selectedContract.contractNumber} sukses terdistribusi ke ${selectedContract.customerEmail} beserta lampiran file PDF.`,
+        'WhatsApp Notifikasi Surat Pengajuan Terkirim',
+        `Pesan tanda terima pengajuan sewa ${selectedApplication.applicationNumber} beserta notifikasi dokumen diproses untuk nomor WhatsApp ${selectedApplication.customerPhone}`,
         'success'
       );
-    }, 1500);
+      window.open(waLink, '_blank');
+    }, 1000);
   };
 
   const handleSendWhatsApp = async () => {
@@ -793,12 +980,12 @@ export const RentContractView: React.FC = () => {
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition border ${
                         deliveryStatus.email === 'success'
                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200 animate-pulse-subtle'
                       }`}
-                      title="Kirim Salinan Kontrak via Email"
+                      title="Kirim Salinan Kontrak via Email (PDF Terlampir)"
                     >
                       <Mail size={13} />
-                      <span>{deliveryStatus.email === 'success' ? 'Email Terkirim' : 'Email'}</span>
+                      <span>{deliveryStatus.email === 'success' ? 'Email Terkirim' : deliveryStatus.email === 'sending' ? 'Mengirim...' : 'Email'}</span>
                     </button>
 
                     <button
@@ -1715,12 +1902,41 @@ export const RentContractView: React.FC = () => {
                   <div className="flex items-center gap-2 self-end md:self-auto">
                     <button
                       onClick={() => generateRentalApplicationPDF(selectedApplication, settings)}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow cursor-pointer"
+                      className="px-3 py-2 bg-slate-105 hover:bg-slate-200/80 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-slate-200 shadow-sm"
                       title="Download Certified PDF document"
                     >
                       <Download size={13} />
-                      <span>Unduh PDF (Otomatis Barcode)</span>
+                      <span>Unduh PDF</span>
                     </button>
+
+                    <button
+                      onClick={handleSendAppEmail}
+                      disabled={appDeliveryStatus.email === 'sending'}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition border shadow-sm ${
+                        appDeliveryStatus.email === 'success'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-750 border-indigo-200 animate-pulse-subtle'
+                      }`}
+                      title="Kirim Salinan Surat Pengajuan via Email (PDF Terlampir)"
+                    >
+                      <Mail size={13} />
+                      <span>{appDeliveryStatus.email === 'success' ? 'Email Terkirim' : appDeliveryStatus.email === 'sending' ? 'Mengirim...' : 'Kirim Email'}</span>
+                    </button>
+
+                    <button
+                      onClick={handleSendAppWhatsApp}
+                      disabled={appDeliveryStatus.wa === 'sending'}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition border shadow-sm ${
+                        appDeliveryStatus.wa === 'success'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-800 border-emerald-250'
+                      }`}
+                      title="Kirim Notifikasi Pengajuan via WhatsApp"
+                    >
+                      <Phone size={13} />
+                      <span>{appDeliveryStatus.wa === 'success' ? 'WA Terkirim' : 'Kirim WhatsApp'}</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         handleDeleteApplication(selectedApplication.id);

@@ -962,8 +962,9 @@ export const generateInvoicePDFBase64 = (
  */
 export const generateContractPDF = (
   contract: RentContract,
-  settings: SystemSetting | null
-) => {
+  settings: SystemSetting | null,
+  outputBase64?: boolean
+): any => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -1246,6 +1247,15 @@ export const generateContractPDF = (
   doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
   doc.text('Halaman 1 dari 1 - Dokumen Perjanjian Sewa Elektronik Sah', pageWidth / 2, pageHeight - 8, { align: 'center' });
 
+  if (outputBase64) {
+    const dataUri = doc.output('datauristring');
+    const commaIdx = dataUri.indexOf(',');
+    if (commaIdx !== -1) {
+      return dataUri.substring(commaIdx + 1);
+    }
+    return '';
+  }
+
   doc.save(`KONTRAK_${contract.contractNumber}_${contract.customerName.replace(/[^a-zA-Z]/g, '_')}.pdf`);
 };
 
@@ -1299,8 +1309,9 @@ export const generateRentalApplicationPDF = (
     customerSignatureBase64?: string;
     customerSignatureQrBase64?: string;
   },
-  settings: SystemSetting | null
-) => {
+  settings: SystemSetting | null,
+  outputBase64?: boolean
+): any => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -1508,6 +1519,15 @@ export const generateRentalApplicationPDF = (
   doc.setFontSize(7);
   doc.setTextColor(textMuted[0], textMuted[1], textMuted[2]);
   doc.text('Surat Pengajuan Minat Sewa Digital Resmi | PT. Foresyndo Global Indonesia | Sistem Otomasi Barcode & QR', pageWidth / 2, pageHeight - 8, { align: 'center' });
+
+  if (outputBase64) {
+    const dataUri = doc.output('datauristring');
+    const commaIdx = dataUri.indexOf(',');
+    if (commaIdx !== -1) {
+      return dataUri.substring(commaIdx + 1);
+    }
+    return '';
+  }
 
   doc.save(`SURAT_PENGAJUAN_${app.applicationNumber}_${app.customerName.replace(/[^a-zA-Z]/g, '_')}.pdf`);
 };
